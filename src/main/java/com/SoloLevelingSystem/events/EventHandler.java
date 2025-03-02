@@ -10,9 +10,11 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingDropsEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -116,7 +118,13 @@ public class EventHandler {
         // Limpiar el registro del último atacante
         LastAttackerStorage.clearLastAttacker(victim);
     }
-
+    @SubscribeEvent
+    public static void onEntityDrop(LivingDropsEvent event) {
+        if (event.getEntity() instanceof Mob mob && mob.getTags().contains("summoned")) {
+            // Cancela todos los drops
+            event.setCanceled(true);
+        }
+    }
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {
         if (event.getEntity() instanceof Player player) {
