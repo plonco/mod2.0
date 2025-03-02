@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Mod.EventBusSubscriber(modid = SoloLevelingSystem.MODID)
 public class EntityStorage {
@@ -207,7 +208,11 @@ public class EntityStorage {
                         // Si es domesticable, hacerla del jugador
                         if (mob instanceof TamableAnimal tamable) {
                             tamable.tame(player);
+                            tamable.setOwnerUUID(player.getUUID());
                         }
+
+                        // Añadir tag para identificación
+                        entity.addTag("friendly");
                     }
 
                     // Añadir la entidad al mundo
@@ -226,6 +231,8 @@ public class EntityStorage {
 
         if (!currentSpawnedEntities.isEmpty()) {
             spawnedEntities.put(playerUUID, currentSpawnedEntities);
+            // Ya no eliminamos las entidades almacenadas
+            // playerEntities.remove(playerUUID); <- Esta línea se elimina
         }
 
         return spawnedAny;
@@ -288,6 +295,11 @@ public class EntityStorage {
         markDirty();
     }
 
+    public static List<Entity> getLivingPlayerEntities(UUID playerUUID) {
+        return spawnedEntities.getOrDefault(playerUUID, new ArrayList<>()).stream()
+                .filter(entity -> entity != null && entity.isAlive())
+                .collect(Collectors.toList());
+    }
     public static class EntityStorageState extends SavedData {
         private final Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities;
 
@@ -346,7 +358,6 @@ public class EntityStorage {
                     entityTypeEntry.getValue().forEach(entityList::add);
                     entityTypeMap.put(entityTypeEntry.getKey().toString(), entityList);
                 }
-
                 allPlayers.put(playerEntry.getKey().toString(), entityTypeMap);
             }
 

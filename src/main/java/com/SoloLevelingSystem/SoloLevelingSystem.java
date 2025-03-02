@@ -2,6 +2,7 @@ package com.SoloLevelingSystem;
 
 import com.SoloLevelingSystem.configs.ConfigManager;
 import com.SoloLevelingSystem.events.EventHandler;
+import com.SoloLevelingSystem.events.CombatEventHandler;
 import com.SoloLevelingSystem.network.SpawnEntitiesMessage;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -51,6 +52,7 @@ public class SoloLevelingSystem {
         // Registrar los manejadores de eventos
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new EventHandler());
+        MinecraftForge.EVENT_BUS.register(new CombatEventHandler()); // Registramos el nuevo manejador de combate
 
         LOGGER.info("Solo Leveling System Mod initialized successfully");
     }
