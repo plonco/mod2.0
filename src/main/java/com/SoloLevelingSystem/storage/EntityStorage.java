@@ -81,16 +81,44 @@ public class EntityStorage {
 
         // Verificar si se alcanzó el límite
         if (entityList.size() >= maxEntities) {
-            // Marcar que se mostró el mensaje de límite
             markLimitMessageShown(playerUUID, entityId);
             LOGGER.warn("Player {} has reached the limit of {} entities for {}",
                     playerUUID, maxEntities, entityId);
             return false;
         }
 
+        // Crear una copia limpia de los datos
+        CompoundTag cleanData = new CompoundTag();
+
+        // Guardar solo los datos esenciales
+        cleanData.putString("id", entityId.toString());
+
+        // Guardar atributos importantes si existen
+        if (entityData.contains("Attributes")) {
+            cleanData.put("Attributes", entityData.get("Attributes"));
+        }
+
+        // Guardar equipamiento si existe
+        if (entityData.contains("ArmorItems")) {
+            cleanData.put("ArmorItems", entityData.get("ArmorItems"));
+        }
+        if (entityData.contains("HandItems")) {
+            cleanData.put("HandItems", entityData.get("HandItems"));
+        }
+
+        // Guardar datos personalizados si existen
+        if (entityData.contains("Tags")) {
+            cleanData.put("Tags", entityData.get("Tags"));
+        }
+
+        // Guardar nombre personalizado si existe
+        if (entityData.contains("CustomName")) {
+            cleanData.put("CustomName", entityData.get("CustomName"));
+        }
+
         // Si se almacena exitosamente, limpiar el mensaje de límite
         clearLimitMessage(playerUUID, entityId);
-        entityList.add(entityData);
+        entityList.add(cleanData);
         markDirty();
         LOGGER.debug("Stored entity {} for player {} ({}/{})",
                 entityId, playerUUID, entityList.size(), maxEntities);
@@ -138,8 +166,30 @@ public class EntityStorage {
                         continue;
                     }
 
-                    // Cargar datos y configurar la entidad
-                    entity.load(entityData);
+                    // Crear una copia de los datos para modificar
+                    CompoundTag modifiedData = entityData.copy();
+
+                    // Asegurarnos de que la entidad esté viva
+                    if (entity instanceof LivingEntity) {
+                        // Eliminar cualquier tag relacionado con la muerte
+                        modifiedData.remove("DeathTime");
+                        modifiedData.remove("DeathLootTable");
+                        modifiedData.remove("Health");  // Lo estableceremos manualmente después
+                        modifiedData.remove("HurtTime");
+                        modifiedData.remove("HurtByTimestamp");
+                        modifiedData.remove("Brain");  // Eliminar estado del cerebro previo
+
+                        // Establecer que la entidad está viva
+                        modifiedData.putBoolean("Dead", false);
+                    }
+
+                    // Cargar los datos modificados
+                    entity.load(modifiedData);
+
+                    // Configurar la salud al máximo si es una entidad viva
+                    if (entity instanceof LivingEntity living) {
+                        living.setHealth(living.getMaxHealth());
+                    }
 
                     // Posicionar cerca del jugador
                     double x = player.getX() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
@@ -150,8 +200,10 @@ public class EntityStorage {
                     // Hacer la entidad amistosa
                     if (entity instanceof Mob mob) {
                         mob.setTarget(null);
-                        mob.setPersistenceRequired(); // Evitar que desaparezca
+                        mob.setPersistenceRequired();
                         mob.setAggressive(false);
+                        mob.setNoAi(false);  // Asegurarnos de que la IA esté activa
+
                         // Si es domesticable, hacerla del jugador
                         if (mob instanceof TamableAnimal tamable) {
                             tamable.tame(player);
