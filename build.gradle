@@ -1,0 +1,168 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '6.0.+'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'java'
+}
+
+group = 'com.SoloLevelingSystem'
+version = '1.0.0'
+
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(17))
+}
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            mods {
+                solo_leveling_system {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            args '--nogui'
+            mods {
+                solo_leveling_system {
+                    source sourceSets.main
+                }
+            }
+        }
+        gameTestServer {
+            workingDirectory project.file('run')
+            property 'forge.enabledGameTestNamespaces', 'solo_leveling_system'
+            mods {
+                solo_leveling_system {
+                    source sourceSets.main
+                }
+            }
+        }
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', 'solo_leveling_system', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+        }
+    }
+}
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://maven.minecraftforge.net/' }
+}
+
+dependencies {
+    minecraft('net.minecraftforge:forge:1.20.1-47.3.0') {
+        exclude group: 'org.jetbrains', module: 'annotations'
+    }
+    implementation 'com.moandjiezana.toml:toml4j:0.7.2'
+}
+
+// Shadow configuration
+shadowJar {
+    archiveBaseName.set("solo_leveling_system")
+    archiveClassifier.set("")
+    archiveVersion.set(version)
+
+    relocate 'com.moandjiezana.toml', 'shadow.com.moandjiezana.toml'
+
+    // Use a merge strategy to handle potential conflicts
+    mergeServiceFiles {
+        exclude 'META-INF/*.DSA'
+        exclude 'META-INF/*.RSA'
+        exclude 'META-INF/*.SF'
+    }
+
+    // Exclude terminalconsoleappender
+    exclude 'net/minecrell/terminalconsole/**'
+
+    // Exclude javaobjectivecbridge
+    exclude 'ca/weblite/**'
+
+    // Exclude nightconfig toml
+    exclude 'com/electronwill/nightconfig/toml/**'
+
+    // Exclude jline
+    exclude 'org/jline/**'
+
+    exclude 'org/jetbrains/annotations/**'
+
+    // Include only runtime dependencies
+    configurations = [project.configurations.runtimeClasspath]
+}
+
+// Add shadowJar as an artifact
+artifacts {
+    archives shadowJar
+}
+
+// Disable the default jar task
+jar {
+    enabled = false
+}
+
+// Disable reobfJar task if it exists
+gradle.taskGraph.whenReady {
+    if (tasks.findByName('reobfJar')) {
+        tasks.named('reobfJar').configure {
+            enabled = false
+        }
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version : '1.20.1',
+            forge_version     : '47.3.0',
+            mod_id            : 'solo_leveling_system',
+            mod_name          : 'Solo Leveling System',
+            mod_license       : 'MIT',
+            mod_version       : '1.0.0',
+            mod_authors       : 'plonco',
+            mod_description   : 'A mod for solo leveling system in Minecraft'
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact shadowJar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// Add a task to verify the contents of the shadowJar
+task verifyShadowJar {
+    doLast {
+        javaexec {
+            classpath = files(shadowJar.archiveFile.get())
+            mainClass = 'com.SoloLevelingSystem.VerifyShadowJar' // Replace with a class in your mod
+        }
+    }
+}
