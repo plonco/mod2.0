@@ -1,78 +1,97 @@
 package com.SoloLevelingSystem.configs;
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.IOException;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
-import java.util.HashSet;
-import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 public class ConfigManager {
+    private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> NORMAL_ENEMIES;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> MINIBOSS_ENEMIES;
+    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BOSS_ENEMIES;
+
     private static final Set<ResourceLocation> normalEnemies = new HashSet<>();
     private static final Set<ResourceLocation> minibossEnemies = new HashSet<>();
     private static final Set<ResourceLocation> bossEnemies = new HashSet<>();
 
-    private static final Properties properties = new Properties();
+    static {
+        BUILDER.comment("Solo Leveling System Configuration");
 
-    public static void loadConfig() {
-        InputStream configStream = ConfigManager.class.getClassLoader().getResourceAsStream("solo_leveling_system/config.toml");
+        BUILDER.push("enemies");
 
-        if (configStream == null) {
-            System.err.println("Could not find config file: solo_leveling_system/config.toml");
-            return;
-        }
+        NORMAL_ENEMIES = BUILDER
+                .comment("List of normal enemies")
+                .defineList("normal",
+                        Arrays.asList(
+                                "minecraft:zombie",
+                                "minecraft:skeleton",
+                                "minecraft:spider",
+                                "minecraft:creeper"
+                        ),
+                        s -> s instanceof String
+                );
 
-        try (InputStreamReader reader = new InputStreamReader(configStream, StandardCharsets.UTF_8)) {
-            properties.load(reader);
+        MINIBOSS_ENEMIES = BUILDER
+                .comment("List of miniboss enemies")
+                .defineList("miniboss",
+                        Arrays.asList(
+                                "minecraft:witch",
+                                "minecraft:enderman",
+                                "minecraft:ravager"
+                        ),
+                        s -> s instanceof String
+                );
 
-            List<String> normalList = convertToList(properties.getProperty("enemies.normal"));
-            if (normalList != null) {
-                for (String enemy : normalList) {
-                    normalEnemies.add(new ResourceLocation(enemy));
-                }
-            }
+        BOSS_ENEMIES = BUILDER
+                .comment("List of boss enemies")
+                .defineList("boss",
+                        Arrays.asList(
+                                "minecraft:ender_dragon",
+                                "minecraft:wither",
+                                "minecraft:warden"
+                        ),
+                        s -> s instanceof String
+                );
 
-            List<String> minibossList = convertToList(properties.getProperty("enemies.miniboss"));
-            if (minibossList != null) {
-                for (String enemy : minibossList) {
-                    minibossEnemies.add(new ResourceLocation(enemy));
-                }
-            }
+        BUILDER.pop();
+    }
 
-            List<String> bossList = convertToList(properties.getProperty("enemies.boss"));
-            if (bossList != null) {
-                for (String enemy : bossList) {
-                    bossEnemies.add(new ResourceLocation(enemy));
-                }
-            }
+    public static final ForgeConfigSpec SPEC = BUILDER.build();
 
-        } catch (IOException e) {
-            System.err.println("Error loading config file: " + e.getMessage());
-            e.printStackTrace();
-        } catch (Exception e) {
-            System.err.println("Error loading config file: " + e.getMessage());
-            e.printStackTrace();
+    public static void register() {
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC);
+    }
+
+    public static void onConfigLoad(final ModConfigEvent.Loading event) {
+        if (event.getConfig().getType() == ModConfig.Type.COMMON) {
+            updateEnemyLists();
         }
     }
 
-    private static List<String> convertToList(String property) {
-        if (property == null) {
-            return null;
+    public static void onConfigReload(final ModConfigEvent.Reloading event) {
+        if (event.getConfig().getType() == ModConfig.Type.COMMON) {
+            updateEnemyLists();
         }
-        String cleanedProperty = property.trim();
-        if (cleanedProperty.startsWith("[") && cleanedProperty.endsWith("]")) {
-            cleanedProperty = cleanedProperty.substring(1, cleanedProperty.length() - 1);
+    }
+
+    private static void updateEnemyLists() {
+        normalEnemies.clear();
+        minibossEnemies.clear();
+        bossEnemies.clear();
+
+        if (NORMAL_ENEMIES.get() != null) {
+            NORMAL_ENEMIES.get().forEach(s -> normalEnemies.add(new ResourceLocation(s)));
         }
-        String[] items = cleanedProperty.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
-        List<String> list = new java.util.ArrayList<>();
-        for (String item : items) {
-            list.add(item.trim().replace("\"", ""));
+        if (MINIBOSS_ENEMIES.get() != null) {
+            MINIBOSS_ENEMIES.get().forEach(s -> minibossEnemies.add(new ResourceLocation(s)));
         }
-        return list;
+        if (BOSS_ENEMIES.get() != null) {
+            BOSS_ENEMIES.get().forEach(s -> bossEnemies.add(new ResourceLocation(s)));
+        }
     }
 
     public static boolean isNormalEnemy(ResourceLocation entity) {

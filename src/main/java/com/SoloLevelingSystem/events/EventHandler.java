@@ -4,9 +4,11 @@ import com.SoloLevelingSystem.SoloLevelingSystem;
 import com.SoloLevelingSystem.configs.ConfigManager;
 import com.SoloLevelingSystem.storage.EntityStorage;
 import com.SoloLevelingSystem.storage.LastAttackerStorage;
+import com.SoloLevelingSystem.storage.PlayerSummons;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -26,84 +28,84 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = SoloLevelingSystem.MODID)
 public class EventHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(EventHandler.class);
-
-    private static final double MAX_DISTANCE = 10.0; // Maximum distance to consider the player as the killer
+    private static final double MAX_DISTANCE = 10.0;
 
     @SubscribeEvent
     public static void onAttackEntity(AttackEntityEvent event) {
-        if (event.getEntity() instanceof Player) {
-            Player player = (Player) event.getEntity();
-            Entity target = event.getTarget();
+        Player player = event.getEntity(); // event.getEntity() ya es un Player
+        Entity target = event.getTarget();
 
-            UUID playerUUID = player.getUUID();
-            List<Entity> spawnedEntities = EntityStorage.getPlayerEntities(playerUUID);
+        UUID playerUUID = player.getUUID();
+        List<Entity> spawnedEntities = EntityStorage.getPlayerEntities(playerUUID);
 
-            if (spawnedEntities != null && spawnedEntities.contains(target)) {
-                LOGGER.debug("Preventing player from attacking their own spawned entity: {}", target);
-                event.setCanceled(true);
-                return;
-            }
+        if (spawnedEntities != null && spawnedEntities.contains(target)) {
+            LOGGER.debug("Preventing player from attacking their own spawned entity: {}", target);
+            event.setCanceled(true);
+            return;
+        }
 
-            if (event.getTarget() instanceof LivingEntity) {
-                LivingEntity entity = (LivingEntity) event.getTarget();
-                LastAttackerStorage.setLastAttacker(entity, player);
-            }
+        if (target instanceof LivingEntity entity) {
+            LastAttackerStorage.setLastAttacker(entity, player);
         }
     }
 
     @SubscribeEvent
     public static void onLivingDeath(LivingDeathEvent event) {
-        if (!(event.getEntity() instanceof LivingEntity)) {
-            return;
-        }
+        LivingEntity victim = event.getEntity();
+        Entity killer = event.getSource().getEntity();
 
-        LivingEntity entity = (LivingEntity) event.getEntity();
-        ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
+        if (killer instanceof Player player) { // Aquí sí es correcto el pattern matching porque killer es Entity
+            ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(victim.getType());
+            LOGGER.debug("Entity died: {}", entityId);
 
-        LOGGER.debug("Entity died: {}", entityId);
-        if (ConfigManager.isNormalEnemy(entityId)) {
-            LOGGER.debug("Entity is a normal enemy: {}", entityId);
-            // ...
-        } else {
-            LOGGER.debug("Entity is NOT a normal enemy: {}", entityId);
-        }
+            // Verificar si es un enemigo válido
+            if (ConfigManager.isNormalEnemy(entityId) ||
+                    ConfigManager.isMinibossEnemy(entityId) ||
+                    ConfigManager.isBossEnemy(entityId)) {
 
-        // Check if the entity is a target enemy
-        if (ConfigManager.isNormalEnemy(entityId) || ConfigManager.isMinibossEnemy(entityId) || ConfigManager.isBossEnemy(entityId)) {
-            // Check if the killer is a player
-            UUID lastAttackerUUID = LastAttackerStorage.getLastAttacker(entity);
-            if (lastAttackerUUID != null) {
-                Player player = event.getEntity().level().getPlayerByUUID(lastAttackerUUID);
-                if (player != null && player.isAlive()) {
-                    // Check if the player is close enough to the entity
-                    Vec3 entityPos = entity.position();
+                if (player.level() instanceof ServerLevel serverLevel) {
+                    // Verificar distancia
+                    Vec3 entityPos = victim.position();
                     Vec3 playerPos = player.position();
                     double distance = entityPos.distanceTo(playerPos);
 
                     if (distance <= MAX_DISTANCE) {
-                        // Store a *new* copy of the entity in the player's storage
+                        // Guardar datos de la entidad
                         CompoundTag entityData = new CompoundTag();
-                        entity.save(entityData);
-                        EntityStorage.storeEntity(player.getUUID(), entity, entityData);
+                        victim.save(entityData);
+                        EntityStorage.storeEntity(player.getUUID(), victim, entityData);
+
+                        // Registrar para invocación
+                        PlayerSummons summons = PlayerSummons.get(serverLevel);
+                        String cleanEntityId = entityId.toString().replace("_loot", "");
+                        ResourceLocation cleanId = new ResourceLocation(cleanEntityId);
+
+                        if (ConfigManager.isNormalEnemy(entityId)) {
+                            if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.NORMAL)) {
+                                player.sendSystemMessage(Component.literal("¡Nueva entidad normal añadida a tus invocaciones!"));
+                            }
+                        } else if (ConfigManager.isMinibossEnemy(entityId)) {
+                            if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.MINIBOSS)) {
+                                player.sendSystemMessage(Component.literal("¡Nueva entidad miniboss añadida a tus invocaciones!"));
+                            }
+                        } else if (ConfigManager.isBossEnemy(entityId)) {
+                            if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.BOSS)) {
+                                player.sendSystemMessage(Component.literal("¡Nueva entidad boss añadida a tus invocaciones!"));
+                            }
+                        }
+
                         LOGGER.debug("Stored entity for player: {} - {}", player.getUUID(), entityId);
                     } else {
                         LOGGER.debug("Entity not killed by player, player is too far away.");
                     }
-                } else {
-                    LOGGER.debug("Entity not killed by player, last attacker is not a valid player.");
                 }
-            } else {
-                LOGGER.debug("Entity not killed by player, no last attacker found.");
             }
-
-            LastAttackerStorage.clearLastAttacker(entity); // Clear the last attacker after death
         }
     }
 
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {
-        if (event.getEntity() instanceof Player) {
-            Player player = (Player) event.getEntity();
+        if (event.getEntity() instanceof Player player) {
             Entity source = event.getSource().getEntity();
 
             if (source != null) {
@@ -113,7 +115,6 @@ public class EventHandler {
                 if (spawnedEntities != null && spawnedEntities.contains(source)) {
                     LOGGER.debug("Preventing damage from spawned entity: {}", source);
                     event.setCanceled(true);
-                    return;
                 }
             }
         }

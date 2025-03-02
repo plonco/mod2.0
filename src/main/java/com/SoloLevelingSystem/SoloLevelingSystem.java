@@ -11,6 +11,8 @@ import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -34,20 +36,29 @@ public class SoloLevelingSystem {
     private static int messageID = 0;
 
     public SoloLevelingSystem() {
+        LOGGER.info("Initializing Solo Leveling System Mod");
+
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // Load the configuration here, in the constructor
-        ConfigManager.loadConfig();
+        // Registrar la configuración antes de cualquier otra cosa
+        ConfigManager.register();
 
+        // Registrar los event listeners
         modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(ConfigManager::onConfigLoad);
+        modEventBus.addListener(ConfigManager::onConfigReload);
 
+        // Registrar los manejadores de eventos
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new EventHandler());
+
+        LOGGER.info("Solo Leveling System Mod initialized successfully");
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // ConfigManager.loadConfig(); // Remove this line
+        LOGGER.info("Solo Leveling System - Common Setup");
 
+        // Registrar mensajes de red
         CHANNEL.registerMessage(
                 messageID++,
                 SpawnEntitiesMessage.class,
@@ -55,19 +66,34 @@ public class SoloLevelingSystem {
                 SpawnEntitiesMessage::new,
                 SpawnEntitiesMessage::handle
         );
-        LOGGER.info("Registered SpawnEntitiesMessage");
+
+        LOGGER.info("Network messages registered successfully");
     }
 
     @SubscribeEvent
     public void onServerStarting(ServerStartedEvent event) {
-        LOGGER.info("HELLO from server starting");
+        LOGGER.info("Solo Leveling System - Server Starting");
     }
 
+    // Eventos específicos del cliente
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
-            LOGGER.info("HELLO from client setup");
+            LOGGER.info("Solo Leveling System - Client Setup");
         }
+    }
+
+    // Métodos de utilidad para el registro de mensajes de red
+    public static SimpleChannel getChannel() {
+        return CHANNEL;
+    }
+
+    public static String getModId() {
+        return MODID;
+    }
+
+    public static Logger getLogger() {
+        return LOGGER;
     }
 }
