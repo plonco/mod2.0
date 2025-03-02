@@ -32,16 +32,26 @@ public class EntityStorage {
     private static final Random RANDOM = new Random();
     private static final double SPAWN_RADIUS = 3.0;
 
-    // Límites de almacenamiento por tipo
-    private static final int MAX_NORMAL_ENTITIES = 5;
-    private static final int MAX_MINIBOSS_ENTITIES = 2;
-    private static final int MAX_BOSS_ENTITIES = 1;
-
     // Almacenamiento principal de entidades por jugador
     private static Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities = new HashMap<>();
 
     // Entidades actualmente invocadas
     private static final Map<UUID, List<Entity>> spawnedEntities = new HashMap<>();
+
+    // Rastreo de mensajes de límite mostrados
+    private static final Map<UUID, Set<ResourceLocation>> shownLimitMessages = new HashMap<>();
+
+    public static void clearLimitMessage(UUID playerUUID, ResourceLocation entityId) {
+        shownLimitMessages.computeIfAbsent(playerUUID, k -> new HashSet<>()).remove(entityId);
+    }
+
+    public static boolean hasShownLimitMessage(UUID playerUUID, ResourceLocation entityId) {
+        return shownLimitMessages.computeIfAbsent(playerUUID, k -> new HashSet<>()).contains(entityId);
+    }
+
+    private static void markLimitMessageShown(UUID playerUUID, ResourceLocation entityId) {
+        shownLimitMessages.computeIfAbsent(playerUUID, k -> new HashSet<>()).add(entityId);
+    }
 
     public static boolean storeEntity(UUID playerUUID, LivingEntity entity, CompoundTag entityData) {
         ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
@@ -71,28 +81,20 @@ public class EntityStorage {
 
         // Verificar si se alcanzó el límite
         if (entityList.size() >= maxEntities) {
+            // Marcar que se mostró el mensaje de límite
+            markLimitMessageShown(playerUUID, entityId);
             LOGGER.warn("Player {} has reached the limit of {} entities for {}",
                     playerUUID, maxEntities, entityId);
             return false;
         }
 
-        // Almacenar la entidad
+        // Si se almacena exitosamente, limpiar el mensaje de límite
+        clearLimitMessage(playerUUID, entityId);
         entityList.add(entityData);
         markDirty();
         LOGGER.debug("Stored entity {} for player {} ({}/{})",
                 entityId, playerUUID, entityList.size(), maxEntities);
         return true;
-    }
-
-    private static int getMaxEntitiesForType(ResourceLocation entityId) {
-        if (ConfigManager.isNormalEnemy(entityId)) {
-            return MAX_NORMAL_ENTITIES;
-        } else if (ConfigManager.isMinibossEnemy(entityId)) {
-            return MAX_MINIBOSS_ENTITIES;
-        } else if (ConfigManager.isBossEnemy(entityId)) {
-            return MAX_BOSS_ENTITIES;
-        }
-        return 0;
     }
 
     public static boolean spawnStoredEntities(Player player) {
@@ -196,6 +198,7 @@ public class EntityStorage {
     public static void clearEntities(UUID playerUUID) {
         playerEntities.remove(playerUUID);
         clearSpawnedEntities(playerUUID);
+        shownLimitMessages.remove(playerUUID); // Limpiar también los mensajes mostrados
         LOGGER.debug("Cleared all stored entities for player: {}", playerUUID);
         markDirty();
     }
@@ -263,14 +266,16 @@ public class EntityStorage {
                             for (int i = 0; i < entityListTag.size(); i++) {
                                 entityList.add(entityListTag.getCompound(i));
                             }
+
                             playerEntityMap.put(entityType, entityList);
                         } catch (Exception e) {
-                            LOGGER.error("Error loading entity type {}: {}", entityTypeKey, e);
+                            LOGGER.error("Error loading entity type {}: {}", entityTypeKey, e.getMessage());
                         }
                     }
+
                     loadedEntities.put(playerUUID, playerEntityMap);
-                } catch (IllegalArgumentException e) {
-                    LOGGER.error("Failed to load UUID: {}", playerKey, e);
+                } catch (Exception e) {
+                    LOGGER.error("Error loading player data {}: {}", playerKey, e.getMessage());
                 }
             }
 
@@ -282,17 +287,15 @@ public class EntityStorage {
             CompoundTag allPlayers = new CompoundTag();
 
             for (Map.Entry<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntry : playerEntities.entrySet()) {
-                CompoundTag playerTag = new CompoundTag();
+                CompoundTag entityTypeMap = new CompoundTag();
 
                 for (Map.Entry<ResourceLocation, List<CompoundTag>> entityTypeEntry : playerEntry.getValue().entrySet()) {
-                    ListTag entityListTag = new ListTag();
-                    for (CompoundTag entityData : entityTypeEntry.getValue()) {
-                        entityListTag.add(entityData);
-                    }
-                    playerTag.put(entityTypeEntry.getKey().toString(), entityListTag);
+                    ListTag entityList = new ListTag();
+                    entityTypeEntry.getValue().forEach(entityList::add);
+                    entityTypeMap.put(entityTypeEntry.getKey().toString(), entityList);
                 }
 
-                allPlayers.put(playerEntry.getKey().toString(), playerTag);
+                allPlayers.put(playerEntry.getKey().toString(), entityTypeMap);
             }
 
             tag.put("playerEntities", allPlayers);

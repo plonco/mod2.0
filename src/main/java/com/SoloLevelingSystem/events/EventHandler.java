@@ -87,27 +87,23 @@ public class EventHandler {
                             String cleanEntityId = entityId.toString().replace("_loot", "");
                             ResourceLocation cleanId = new ResourceLocation(cleanEntityId);
 
-                            String entityType;
                             if (ConfigManager.isNormalEnemy(entityId)) {
-                                entityType = "normal";
                                 if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.NORMAL)) {
                                     player.sendSystemMessage(Component.literal("¡Nueva entidad normal añadida a tus invocaciones!"));
                                 }
                             } else if (ConfigManager.isMinibossEnemy(entityId)) {
-                                entityType = "miniboss";
                                 if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.MINIBOSS)) {
                                     player.sendSystemMessage(Component.literal("¡Nueva entidad miniboss añadida a tus invocaciones!"));
                                 }
                             } else if (ConfigManager.isBossEnemy(entityId)) {
-                                entityType = "boss";
                                 if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.BOSS)) {
                                     player.sendSystemMessage(Component.literal("¡Nueva entidad boss añadida a tus invocaciones!"));
                                 }
                             }
 
                             LOGGER.debug("Stored entity for player: {} - {}", player.getUUID(), entityId);
-                        } else {
-                            // Informar al jugador que se alcanzó el límite
+                        } else if (!EntityStorage.hasShownLimitMessage(player.getUUID(), entityId)) {
+                            // Solo mostrar el mensaje si no se ha mostrado antes
                             String entityName = entityId.toString().replace("minecraft:", "");
                             player.sendSystemMessage(Component.literal("Has alcanzado el límite de " +
                                     ConfigManager.getEntityLimit(entityId) + " para " + entityName));
@@ -116,6 +112,7 @@ public class EventHandler {
                 }
             }
         }
+
         // Limpiar el registro del último atacante
         LastAttackerStorage.clearLastAttacker(victim);
     }
