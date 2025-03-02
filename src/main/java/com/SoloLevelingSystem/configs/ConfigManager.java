@@ -1,86 +1,60 @@
 package com.SoloLevelingSystem.configs;
 
-import net.minecraft.resources.ResourceLocation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.loading.FMLPaths;
 
-import com.moandjiezana.toml.Toml;
-
-import java.io.InputStream;
-import java.util.*;
+import java.nio.file.Path;
 
 public class ConfigManager {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigManager.class);
-    private static final Set<ResourceLocation> normalEnemies = new HashSet<>();
-    private static final Set<ResourceLocation> minibossEnemies = new HashSet<>();
-    private static final Set<ResourceLocation> bossEnemies = new HashSet<>();
+    private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
+    private static final ForgeConfigSpec SPEC;
 
-    private static class ModConfig {
-        Enemies enemies = new Enemies();
+    public static final ForgeConfigSpec.IntValue MAX_STORED_ENTITIES;
+    public static final ForgeConfigSpec.BooleanValue ENABLE_PARTICLE_EFFECTS;
+    public static final ForgeConfigSpec.IntValue SUMMON_COOLDOWN;
 
-        static class Enemies {
-            List<String> normal = new ArrayList<>();
-            List<String> miniboss = new ArrayList<>();
-            List<String> boss = new ArrayList<>();
-        }
+    static {
+        BUILDER.push("Solo Leveling System Configuration");
+
+        MAX_STORED_ENTITIES = BUILDER
+                .comment("Maximum number of entities that can be stored per player")
+                .defineInRange("maxStoredEntities", 50, 1, 1000);
+
+        ENABLE_PARTICLE_EFFECTS = BUILDER
+                .comment("Enable particle effects when spawning stored entities")
+                .define("enableParticleEffects", true);
+
+        SUMMON_COOLDOWN = BUILDER
+                .comment("Cooldown in seconds between summons")
+                .defineInRange("summonCooldown", 30, 0, 3600);
+
+        BUILDER.pop();
+        SPEC = BUILDER.build();
+    }
+
+    public static void init() {
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC, "solo_leveling_system.toml");
     }
 
     public static void loadConfig() {
-        LOGGER.debug("Cargando configuración...");
-        normalEnemies.clear();
-        minibossEnemies.clear();
-        bossEnemies.clear();
-
-        try (InputStream configStream = ConfigManager.class.getClassLoader()
-                .getResourceAsStream("config/solo_leveling_system/config.toml")) {
-
-            if (configStream == null) {
-                LOGGER.error("Archivo de configuración no encontrado!");
-                return;
-            }
-
-            Toml toml = new Toml().read(configStream);
-            ModConfig config = toml.to(ModConfig.class);
-
-            processList(config.enemies.normal, normalEnemies);
-            processList(config.enemies.miniboss, minibossEnemies);
-            processList(config.enemies.boss, bossEnemies);
-
-            LOGGER.info("=== Configuración Cargada ===");
-            LOGGER.info("Normales: {}", normalEnemies);
-            LOGGER.info("Minibosses: {}", minibossEnemies);
-            LOGGER.info("Bosses: {}", minibossEnemies);
-
-        } catch (Exception e) {
-            LOGGER.error("Error cargando configuración: {}", e.getMessage());
+        Path configPath = FMLPaths.CONFIGDIR.get().resolve("solo_leveling_system.toml");
+        if (java.nio.file.Files.exists(configPath)) {
+            // La configuración se carga automáticamente por Forge
+            System.out.println("Solo Leveling System config loaded from " + configPath);
         }
     }
 
-    private static void processList(List<String> entries, Set<ResourceLocation> targetSet) {
-        for (String entry : entries) {
-            try {
-                ResourceLocation location = ResourceLocation.tryParse(entry.trim());
-                if (location == null) {
-                    LOGGER.warn("Entrada inválida: '{}'", entry);
-                    continue;
-                }
-                targetSet.add(location);
-                LOGGER.debug("Registrado: {}", location);
-            } catch (Exception e) {
-                LOGGER.warn("Error procesando entrada: '{}'", entry);
-            }
-        }
+    public static int getMaxStoredEntities() {
+        return MAX_STORED_ENTITIES.get();
     }
 
-    public static boolean isNormalEnemy(ResourceLocation entity) {
-        return normalEnemies.contains(entity);
+    public static boolean areParticleEffectsEnabled() {
+        return ENABLE_PARTICLE_EFFECTS.get();
     }
 
-    public static boolean isMinibossEnemy(ResourceLocation entity) {
-        return minibossEnemies.contains(entity);
-    }
-
-    public static boolean isBossEnemy(ResourceLocation entity) {
-        return bossEnemies.contains(entity);
+    public static int getSummonCooldown() {
+        return SUMMON_COOLDOWN.get();
     }
 }

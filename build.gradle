@@ -3,7 +3,6 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '6.0.+'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
     id 'java'
 }
 
@@ -27,6 +26,8 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            property 'java.base/java.lang', 'ALL-UNNAMED'
+            property 'java.base/java.lang.reflect', 'ALL-UNNAMED'
 
             mods {
                 solo_leveling_system {
@@ -39,6 +40,8 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+            property 'java.base/java.lang', 'ALL-UNNAMED'
+            property 'java.base/java.lang.reflect', 'ALL-UNNAMED'
             args '--nogui'
 
             mods {
@@ -46,6 +49,17 @@ minecraft {
                     source sourceSets.main
                 }
             }
+        }
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
         }
     }
 }
@@ -60,11 +74,11 @@ repositories {
 
 dependencies {
     minecraft "net.minecraftforge:forge:1.20.1-47.3.0"
-    implementation 'com.moandjiezana.toml:toml4j:0.7.2'
+    implementation fg.deobf('net.minecraftforge:forge:1.20.1-47.3.0')
 }
 
-tasks.named('jar') { jar ->
-    jar.manifest {
+jar {
+    manifest {
         attributes([
                 'Specification-Title': 'solo_leveling_system',
                 'Specification-Vendor': 'plonco',
@@ -72,47 +86,11 @@ tasks.named('jar') { jar ->
                 'Implementation-Title': project.name,
                 'Implementation-Version': project.version,
                 'Implementation-Vendor': 'plonco',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                'FMLModType': 'GAMELIBRARY'
         ])
     }
-    jar.finalizedBy 'reobfJar'
-}
-
-shadowJar {
-    archiveClassifier.set('')
-    dependencies {
-        exclude(dependency('net.minecraftforge:forge'))
-    }
-
-    exclude 'META-INF/*.SF'
-    exclude 'META-INF/*.DSA'
-    exclude 'META-INF/*.RSA'
-
-    relocate 'com.moandjiezana.toml', 'shadow.com.moandjiezana.toml'
-
-    manifest {
-        inheritFrom tasks.jar.manifest
-    }
-}
-
-reobf {
-    jar {}
-}
-
-tasks.build.dependsOn tasks.shadowJar
-tasks.shadowJar.finalizedBy 'reobfJar'
-
-artifacts {
-    archives jar
-    archives shadowJar
-}
-
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifact shadowJar
-        }
-    }
+    finalizedBy 'reobfJar'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -121,7 +99,23 @@ tasks.withType(JavaCompile).configureEach {
     options.compilerArgs << '-Xlint:unchecked'
 }
 
-// Asegúrate de que las tareas se ejecuten en el orden correcto
-tasks.named('reobfJar') {
-    dependsOn tasks.jar
+// Configuración específica para la compilación de Java
+tasks.named('compileJava') {
+    options.compilerArgs += [
+            '--add-exports', 'java.base/sun.security.util=ALL-UNNAMED',
+            '--add-exports', 'java.base/java.lang.reflect=ALL-UNNAMED'
+    ]
+}
+
+// Configuración del entorno de desarrollo
+tasks.named('eclipse') {
+    jdt {
+        javaRuntimeName = 'JavaSE-17'
+    }
+}
+
+tasks.named('idea') {
+    module {
+        inheritOutputDirs = true
+    }
 }
