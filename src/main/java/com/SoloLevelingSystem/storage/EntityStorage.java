@@ -49,7 +49,7 @@ public class EntityStorage {
         return shownLimitMessages.computeIfAbsent(playerUUID, k -> new HashSet<>()).contains(entityId);
     }
 
-    private static void markLimitMessageShown(UUID playerUUID, ResourceLocation entityId) {
+    public static void markLimitMessageShown(UUID playerUUID, ResourceLocation entityId) {
         shownLimitMessages.computeIfAbsent(playerUUID, k -> new HashSet<>()).add(entityId);
     }
 
@@ -171,16 +171,20 @@ public class EntityStorage {
 
                     // Asegurarnos de que la entidad esté viva
                     if (entity instanceof LivingEntity) {
-                        // Eliminar cualquier tag relacionado con la muerte
+                        // Eliminar cualquier tag relacionado con la muerte o daño
                         modifiedData.remove("DeathTime");
                         modifiedData.remove("DeathLootTable");
-                        modifiedData.remove("Health");  // Lo estableceremos manualmente después
+                        modifiedData.remove("Health");
                         modifiedData.remove("HurtTime");
                         modifiedData.remove("HurtByTimestamp");
-                        modifiedData.remove("Brain");  // Eliminar estado del cerebro previo
+                        modifiedData.remove("Brain");
+                        modifiedData.remove("AngryAt");
+                        modifiedData.remove("AngerTime");
+                        modifiedData.remove("PersistenceRequired");
 
                         // Establecer que la entidad está viva
                         modifiedData.putBoolean("Dead", false);
+                        modifiedData.putBoolean("PersistenceRequired", true);
                     }
 
                     // Cargar los datos modificados
@@ -199,14 +203,34 @@ public class EntityStorage {
 
                     // Hacer la entidad amistosa
                     if (entity instanceof Mob mob) {
+                        // Limpiar cualquier objetivo previo hostil
                         mob.setTarget(null);
+                        mob.setLastHurtByMob(null);
+                        mob.setLastHurtByPlayer(null);
+                        mob.setLastHurtMob(null);
+
+                        // Configurar comportamiento
                         mob.setPersistenceRequired();
-                        mob.setAggressive(false);
                         mob.setNoAi(false);  // Asegurarnos de que la IA esté activa
+
+                        // Establecer como amistoso hacia el jugador
+                        mob.addTag("friendly");
+                        mob.addTag("player_summon");
+
+                        // Mantener el rango de seguimiento para que puedan seguir al jugador y atacar objetivos
+                        try {
+                            if (mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE) != null) {
+                                mob.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.FOLLOW_RANGE)
+                                        .setBaseValue(16.0); // Establecer un rango de seguimiento razonable
+                            }
+                        } catch (Exception e) {
+                            LOGGER.debug("Could not modify follow range for entity: {}", mob);
+                        }
 
                         // Si es domesticable, hacerla del jugador
                         if (mob instanceof TamableAnimal tamable) {
                             tamable.tame(player);
+                            tamable.setOwnerUUID(player.getUUID());
                         }
                     }
 
@@ -250,7 +274,7 @@ public class EntityStorage {
     public static void clearEntities(UUID playerUUID) {
         playerEntities.remove(playerUUID);
         clearSpawnedEntities(playerUUID);
-        shownLimitMessages.remove(playerUUID); // Limpiar también los mensajes mostrados
+        shownLimitMessages.remove(playerUUID);
         LOGGER.debug("Cleared all stored entities for player: {}", playerUUID);
         markDirty();
     }
@@ -288,6 +312,10 @@ public class EntityStorage {
         markDirty();
     }
 
+    public static Map<UUID, List<Entity>> getSpawnedEntitiesMap() {
+        return spawnedEntities;
+    }
+
     public static class EntityStorageState extends SavedData {
         private final Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities;
 
@@ -298,7 +326,6 @@ public class EntityStorage {
         public Map<UUID, Map<ResourceLocation, List<CompoundTag>>> getPlayerEntities() {
             return playerEntities;
         }
-
         public static EntityStorageState create(CompoundTag tag) {
             Map<UUID, Map<ResourceLocation, List<CompoundTag>>> loadedEntities = new HashMap<>();
             CompoundTag allPlayers = tag.getCompound("playerEntities");
