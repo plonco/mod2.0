@@ -6,24 +6,16 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 public class SpawnEntitiesMessage {
+    public SpawnEntitiesMessage() {}
 
-    public SpawnEntitiesMessage() {
-        // No data needed for this message
-    }
+    public SpawnEntitiesMessage(FriendlyByteBuf buffer) {}
 
-    public SpawnEntitiesMessage(FriendlyByteBuf buffer) {
-        // Read data from the buffer (if needed)
-    }
-
-    public void encode(FriendlyByteBuf buffer) {
-        // Write data to the buffer (if needed)
-    }
+    public void encode(FriendlyByteBuf buffer) {}
 
     public boolean handle(Supplier<NetworkEvent.Context> context) {
         context.get().enqueueWork(() -> {
-            // This is executed on the server thread!
             ServerPlayer player = context.get().getSender();
-            if (player != null) {
+            if (player != null && player.getServer() != null) {
                 com.SoloLevelingSystem.storage.EntityStorage.spawnStoredEntities(player);
             }
         });
