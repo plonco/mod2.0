@@ -52,18 +52,22 @@ public class EventHandler {
     @SubscribeEvent
     public static void onLivingDeath(LivingDeathEvent event) {
         LivingEntity victim = event.getEntity();
-        Entity killer = event.getSource().getEntity();
 
-        if (killer instanceof Player player) { // Aquí sí es correcto el pattern matching porque killer es Entity
-            ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(victim.getType());
-            LOGGER.debug("Entity died: {}", entityId);
+        UUID lastAttackerUUID = LastAttackerStorage.getLastAttacker(victim);
+        if (lastAttackerUUID != null) {
+            Player player = victim.level().getPlayerByUUID(lastAttackerUUID);
 
-            // Verificar si es un enemigo válido
-            if (ConfigManager.isNormalEnemy(entityId) ||
-                    ConfigManager.isMinibossEnemy(entityId) ||
-                    ConfigManager.isBossEnemy(entityId)) {
+            if (player != null && player.isAlive() &&
+                    player.level() instanceof ServerLevel serverLevel) {
 
-                if (player.level() instanceof ServerLevel serverLevel) {
+                ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(victim.getType());
+                LOGGER.debug("Entity died: {}", entityId);
+
+                // Verificar si es un enemigo válido
+                if (ConfigManager.isNormalEnemy(entityId) ||
+                        ConfigManager.isMinibossEnemy(entityId) ||
+                        ConfigManager.isBossEnemy(entityId)) {
+
                     // Verificar distancia
                     Vec3 entityPos = victim.position();
                     Vec3 playerPos = player.position();
@@ -73,34 +77,47 @@ public class EventHandler {
                         // Guardar datos de la entidad
                         CompoundTag entityData = new CompoundTag();
                         victim.save(entityData);
-                        EntityStorage.storeEntity(player.getUUID(), victim, entityData);
 
-                        // Registrar para invocación
-                        PlayerSummons summons = PlayerSummons.get(serverLevel);
-                        String cleanEntityId = entityId.toString().replace("_loot", "");
-                        ResourceLocation cleanId = new ResourceLocation(cleanEntityId);
+                        // Intentar almacenar la entidad
+                        boolean stored = EntityStorage.storeEntity(player.getUUID(), victim, entityData);
 
-                        if (ConfigManager.isNormalEnemy(entityId)) {
-                            if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.NORMAL)) {
-                                player.sendSystemMessage(Component.literal("¡Nueva entidad normal añadida a tus invocaciones!"));
+                        if (stored) {
+                            // Solo registrar para invocación si se almacenó correctamente
+                            PlayerSummons summons = PlayerSummons.get(serverLevel);
+                            String cleanEntityId = entityId.toString().replace("_loot", "");
+                            ResourceLocation cleanId = new ResourceLocation(cleanEntityId);
+
+                            String entityType;
+                            if (ConfigManager.isNormalEnemy(entityId)) {
+                                entityType = "normal";
+                                if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.NORMAL)) {
+                                    player.sendSystemMessage(Component.literal("¡Nueva entidad normal añadida a tus invocaciones!"));
+                                }
+                            } else if (ConfigManager.isMinibossEnemy(entityId)) {
+                                entityType = "miniboss";
+                                if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.MINIBOSS)) {
+                                    player.sendSystemMessage(Component.literal("¡Nueva entidad miniboss añadida a tus invocaciones!"));
+                                }
+                            } else if (ConfigManager.isBossEnemy(entityId)) {
+                                entityType = "boss";
+                                if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.BOSS)) {
+                                    player.sendSystemMessage(Component.literal("¡Nueva entidad boss añadida a tus invocaciones!"));
+                                }
                             }
-                        } else if (ConfigManager.isMinibossEnemy(entityId)) {
-                            if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.MINIBOSS)) {
-                                player.sendSystemMessage(Component.literal("¡Nueva entidad miniboss añadida a tus invocaciones!"));
-                            }
-                        } else if (ConfigManager.isBossEnemy(entityId)) {
-                            if (summons.addSummon(player.getUUID(), cleanId, PlayerSummons.SummonType.BOSS)) {
-                                player.sendSystemMessage(Component.literal("¡Nueva entidad boss añadida a tus invocaciones!"));
-                            }
+
+                            LOGGER.debug("Stored entity for player: {} - {}", player.getUUID(), entityId);
+                        } else {
+                            // Informar al jugador que se alcanzó el límite
+                            String entityName = entityId.toString().replace("minecraft:", "");
+                            player.sendSystemMessage(Component.literal("Has alcanzado el límite de " +
+                                    ConfigManager.getEntityLimit(entityId) + " para " + entityName));
                         }
-
-                        LOGGER.debug("Stored entity for player: {} - {}", player.getUUID(), entityId);
-                    } else {
-                        LOGGER.debug("Entity not killed by player, player is too far away.");
                     }
                 }
             }
         }
+        // Limpiar el registro del último atacante
+        LastAttackerStorage.clearLastAttacker(victim);
     }
 
     @SubscribeEvent

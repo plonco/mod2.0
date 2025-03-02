@@ -43,29 +43,45 @@ public class EntityStorage {
     // Entidades actualmente invocadas
     private static final Map<UUID, List<Entity>> spawnedEntities = new HashMap<>();
 
-    public static void storeEntity(UUID playerUUID, LivingEntity entity, CompoundTag entityData) {
+    public static boolean storeEntity(UUID playerUUID, LivingEntity entity, CompoundTag entityData) {
         ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
+
+        // Verificar si la entidad está configurada
+        if (!ConfigManager.isNormalEnemy(entityId) &&
+                !ConfigManager.isMinibossEnemy(entityId) &&
+                !ConfigManager.isBossEnemy(entityId)) {
+            LOGGER.debug("Entity {} is not configured for storage", entityId);
+            return false;
+        }
+
+        // Obtener el límite para esta entidad específica
+        int maxEntities = ConfigManager.getEntityLimit(entityId);
+        if (maxEntities <= 0) {
+            LOGGER.debug("Entity {} has no storage limit configured", entityId);
+            return false;
+        }
 
         // Inicializar el mapa para el jugador si no existe
         playerEntities.computeIfAbsent(playerUUID, k -> new HashMap<>());
         Map<ResourceLocation, List<CompoundTag>> playerEntityMap = playerEntities.get(playerUUID);
 
-        // Inicializar la lista para el tipo de entidad si no existe
+        // Inicializar la lista para esta entidad específica si no existe
         playerEntityMap.computeIfAbsent(entityId, k -> new ArrayList<>());
         List<CompoundTag> entityList = playerEntityMap.get(entityId);
 
-        // Verificar límites según el tipo de entidad
-        int maxEntities = getMaxEntitiesForType(entityId);
+        // Verificar si se alcanzó el límite
         if (entityList.size() >= maxEntities) {
-            LOGGER.warn("Player {} has reached the maximum entity storage limit for entity type {}.",
-                    playerUUID, entityId);
-            return;
+            LOGGER.warn("Player {} has reached the limit of {} entities for {}",
+                    playerUUID, maxEntities, entityId);
+            return false;
         }
 
-        // Almacenar los datos de la entidad
+        // Almacenar la entidad
         entityList.add(entityData);
         markDirty();
-        LOGGER.debug("Stored entity {} for player {}", entityId, playerUUID);
+        LOGGER.debug("Stored entity {} for player {} ({}/{})",
+                entityId, playerUUID, entityList.size(), maxEntities);
+        return true;
     }
 
     private static int getMaxEntitiesForType(ResourceLocation entityId) {

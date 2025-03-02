@@ -5,14 +5,23 @@ import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
 public class ConfigManager {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ConfigManager.class);
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
+
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> NORMAL_ENEMIES;
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> MINIBOSS_ENEMIES;
     private static final ForgeConfigSpec.ConfigValue<List<? extends String>> BOSS_ENEMIES;
+
+    // Límites por tipo
+    private static final ForgeConfigSpec.IntValue NORMAL_LIMIT;
+    private static final ForgeConfigSpec.IntValue MINIBOSS_LIMIT;
+    private static final ForgeConfigSpec.IntValue BOSS_LIMIT;
 
     private static final Set<ResourceLocation> normalEnemies = new HashSet<>();
     private static final Set<ResourceLocation> minibossEnemies = new HashSet<>();
@@ -23,6 +32,20 @@ public class ConfigManager {
 
         BUILDER.push("enemies");
 
+        // Configuración de límites
+        NORMAL_LIMIT = BUILDER
+                .comment("Maximum number of normal enemies that can be stored of each type")
+                .defineInRange("normal_limit", 5, 1, 100);
+
+        MINIBOSS_LIMIT = BUILDER
+                .comment("Maximum number of miniboss enemies that can be stored of each type")
+                .defineInRange("miniboss_limit", 2, 1, 100);
+
+        BOSS_LIMIT = BUILDER
+                .comment("Maximum number of boss enemies that can be stored of each type")
+                .defineInRange("boss_limit", 1, 1, 100);
+
+        // Listas de enemigos
         NORMAL_ENEMIES = BUILDER
                 .comment("List of normal enemies")
                 .defineList("normal",
@@ -104,5 +127,16 @@ public class ConfigManager {
 
     public static boolean isBossEnemy(ResourceLocation entity) {
         return bossEnemies.contains(entity);
+    }
+
+    public static int getEntityLimit(ResourceLocation entityId) {
+        if (isNormalEnemy(entityId)) {
+            return NORMAL_LIMIT.get();
+        } else if (isMinibossEnemy(entityId)) {
+            return MINIBOSS_LIMIT.get();
+        } else if (isBossEnemy(entityId)) {
+            return BOSS_LIMIT.get();
+        }
+        return 0;
     }
 }
