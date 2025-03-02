@@ -131,7 +131,10 @@ tasks.named('processResources', ProcessResources).configure {
             mod_license       : 'MIT',
             mod_version       : '1.0.0',
             mod_authors       : 'plonco',
-            mod_description   : 'A mod for solo leveling system in Minecraft'
+            mod_description   : 'A mod for solo leveling system in Minecraft',
+            loader_version_range: '[47.3.0,)',
+            forge_version_range: '[47.3.0,)',
+            minecraft_version_range: '[1.20.1]'
     ]
     inputs.properties replaceProperties
 
