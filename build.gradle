@@ -10,12 +10,9 @@ group = 'com.SoloLevelingSystem'
 version = '1.0.0'
 
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(17))
-    withSourcesJar()
-}
-
-base {
-    archivesName = 'solo_leveling_system'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
 }
 
 minecraft {
@@ -26,8 +23,6 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-
-            arg "--mixin.config=solo_leveling_system.mixins.json"
 
             mods {
                 solo_leveling_system {
@@ -40,8 +35,6 @@ minecraft {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-
-            arg "--mixin.config=solo_leveling_system.mixins.json"
             args '--nogui'
 
             mods {
@@ -49,31 +42,6 @@ minecraft {
                     source sourceSets.main
                 }
             }
-        }
-
-        data {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-
-            args '--mod', 'solo_leveling_system', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-
-            mods {
-                solo_leveling_system {
-                    source sourceSets.main
-                }
-            }
-        }
-    }
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs = ['src/main/java']
-        }
-        resources {
-            srcDirs = ['src/main/resources']
         }
     }
 }
@@ -87,14 +55,15 @@ repositories {
 }
 
 dependencies {
-    minecraft "net.minecraftforge:forge:1.20.1-47.3.0"
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    options.compilerArgs << '-Xlint:deprecation'
-    options.compilerArgs << '-Xlint:unchecked'
+    options.compilerArgs = [
+            '-Xlint:deprecation',
+            '-Xlint:unchecked'
+    ]
 }
 
 jar {
@@ -104,41 +73,19 @@ jar {
                 'Specification-Vendor': 'plonco',
                 'Specification-Version': '1',
                 'Implementation-Title': project.name,
-                'Implementation-Version': project.version,
+                'Implementation-Version': version,
                 'Implementation-Vendor': 'plonco',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                'FMLModType': 'GAMELIBRARY',
-                'MixinConfigs': 'solo_leveling_system.mixins.json'
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
     finalizedBy 'reobfJar'
 }
 
-// Agregar esta configuración para evitar problemas de módulos
-tasks.withType(JavaCompile) {
-    options.compilerArgs += [
-            '--add-exports', 'java.base/sun.security.util=ALL-UNNAMED',
-            '--add-exports', 'java.base/java.lang.reflect=ALL-UNNAMED',
-            '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
-            '--add-opens', 'java.base/java.lang.reflect=ALL-UNNAMED'
-    ]
-}
-
-// Configuración específica para el entorno de desarrollo
-tasks.named('processResources') {
-    def replaceProperties = [
-            'version': version,
-            'mcversion': '1.20.1'
-    ]
-
-    inputs.properties replaceProperties
+// Configuración básica de procesamiento de recursos
+processResources {
+    inputs.property 'version', version
 
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties
+        expand 'version': version
     }
-}
-
-// Asegurarse de que los recursos se procesen antes de la compilación
-tasks.named('compileJava') {
-    dependsOn 'processResources'
 }
