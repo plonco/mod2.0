@@ -18,11 +18,7 @@ public class EntityDamageHandler {
             String damageType = source.getMsgId();
 
             // Agregamos "sun_damage" y "inSunlight" para cubrir diferentes versiones de Minecraft
-            if (damageType.equals("inFire") ||
-                    damageType.equals("onFire") ||
-                    damageType.equals("lava") ||
-                    damageType.equals("hotFloor") ||
-                    damageType.equals("drown") ||
+            if (damageType.equals("drown") ||
                     damageType.equals("cactus") ||
                     damageType.equals("dryout") ||
                     damageType.equals("sun_damage") ||
