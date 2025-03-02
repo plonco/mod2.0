@@ -17,12 +17,15 @@ java {
 
 minecraft {
     mappings channel: 'official', version: '1.20.1'
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
 
     runs {
         client {
-            workingDirectory project.file('run')
+            workingDirectory = project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+
+            arg "-mixin.config=solo_leveling_system.mixins.json"
 
             mods {
                 solo_leveling_system {
@@ -32,9 +35,11 @@ minecraft {
         }
 
         server {
-            workingDirectory project.file('run')
+            workingDirectory = project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
+
+            arg "-mixin.config=solo_leveling_system.mixins.json"
             args '--nogui'
 
             mods {
@@ -52,18 +57,47 @@ repositories {
         url = 'https://maven.minecraftforge.net/'
         name = 'Forge'
     }
+    maven {
+        url = 'https://repo.spongepowered.org/repository/maven-public/'
+        name = 'Sponge'
+    }
 }
 
 dependencies {
-    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+    minecraft "net.minecraftforge:forge:1.20.1-47.3.0"
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8'
-    options.compilerArgs = [
-            '-Xlint:deprecation',
-            '-Xlint:unchecked'
-    ]
+// Configuración específica de recursos
+sourceSets {
+    main {
+        resources {
+            srcDirs = ['src/main/resources']
+            exclude 'config/**' // Excluir la carpeta config del procesamiento normal
+        }
+    }
+}
+
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    inputs.property 'version', version
+
+    from(sourceSets.main.resources.srcDirs) {
+        include 'META-INF/mods.toml'
+        expand 'version': version
+    }
+
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'META-INF/mods.toml'
+        exclude 'config/**'
+    }
+
+    // Procesar archivos de configuración por separado
+    from(sourceSets.main.resources.srcDirs) {
+        include 'config/**'
+        duplicatesStrategy = DuplicatesStrategy.FAIL // Fallar si hay duplicados en config
+    }
 }
 
 jar {
@@ -75,17 +109,32 @@ jar {
                 'Implementation-Title': project.name,
                 'Implementation-Version': version,
                 'Implementation-Vendor': 'plonco',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                'FMLModType': 'GAMELIBRARY',
+                'MixinConfigs': 'solo_leveling_system.mixins.json'
         ])
     }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     finalizedBy 'reobfJar'
 }
 
-// Configuración básica de procesamiento de recursos
-processResources {
-    inputs.property 'version', version
+// Tarea para limpiar archivos de configuración duplicados
+task cleanDuplicateConfigs {
+    doLast {
+        def configFiles = fileTree(dir: 'src/main/resources').include('**/config.toml').files +
+                fileTree(dir: 'config').include('**/config.toml').files
 
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand 'version': version
+        configFiles.groupBy { it.name }.each { name, files ->
+            if (files.size() > 1) {
+                files.drop(1).each {
+                    it.delete()
+                    println "Deleted duplicate config file: ${it.absolutePath}"
+                }
+            }
+        }
     }
 }
+
+// Asegurar que la limpieza de duplicados se ejecute antes de processResources
+processResources.dependsOn cleanDuplicateConfigs
