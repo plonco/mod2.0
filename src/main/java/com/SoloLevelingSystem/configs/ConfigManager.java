@@ -1,60 +1,89 @@
 package com.SoloLevelingSystem.configs;
 
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraft.resources.ResourceLocation;
 
-import java.nio.file.Path;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import java.util.HashSet;
+import java.nio.charset.StandardCharsets;
 
 public class ConfigManager {
-    private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
-    private static final ForgeConfigSpec SPEC;
+    private static final Set<ResourceLocation> normalEnemies = new HashSet<>();
+    private static final Set<ResourceLocation> minibossEnemies = new HashSet<>();
+    private static final Set<ResourceLocation> bossEnemies = new HashSet<>();
 
-    public static final ForgeConfigSpec.IntValue MAX_STORED_ENTITIES;
-    public static final ForgeConfigSpec.BooleanValue ENABLE_PARTICLE_EFFECTS;
-    public static final ForgeConfigSpec.IntValue SUMMON_COOLDOWN;
-
-    static {
-        BUILDER.push("Solo Leveling System Configuration");
-
-        MAX_STORED_ENTITIES = BUILDER
-                .comment("Maximum number of entities that can be stored per player")
-                .defineInRange("maxStoredEntities", 50, 1, 1000);
-
-        ENABLE_PARTICLE_EFFECTS = BUILDER
-                .comment("Enable particle effects when spawning stored entities")
-                .define("enableParticleEffects", true);
-
-        SUMMON_COOLDOWN = BUILDER
-                .comment("Cooldown in seconds between summons")
-                .defineInRange("summonCooldown", 30, 0, 3600);
-
-        BUILDER.pop();
-        SPEC = BUILDER.build();
-    }
-
-    public static void init() {
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC, "solo_leveling_system.toml");
-    }
+    private static final Properties properties = new Properties();
 
     public static void loadConfig() {
-        Path configPath = FMLPaths.CONFIGDIR.get().resolve("solo_leveling_system.toml");
-        if (java.nio.file.Files.exists(configPath)) {
-            // La configuración se carga automáticamente por Forge
-            System.out.println("Solo Leveling System config loaded from " + configPath);
+        InputStream configStream = ConfigManager.class.getClassLoader().getResourceAsStream("solo_leveling_system/config.toml");
+
+        if (configStream == null) {
+            System.err.println("Could not find config file: solo_leveling_system/config.toml");
+            return;
+        }
+
+        try (InputStreamReader reader = new InputStreamReader(configStream, StandardCharsets.UTF_8)) {
+            properties.load(reader);
+
+            List<String> normalList = convertToList(properties.getProperty("enemies.normal"));
+            if (normalList != null) {
+                for (String enemy : normalList) {
+                    normalEnemies.add(new ResourceLocation(enemy));
+                }
+            }
+
+            List<String> minibossList = convertToList(properties.getProperty("enemies.miniboss"));
+            if (minibossList != null) {
+                for (String enemy : minibossList) {
+                    minibossEnemies.add(new ResourceLocation(enemy));
+                }
+            }
+
+            List<String> bossList = convertToList(properties.getProperty("enemies.boss"));
+            if (bossList != null) {
+                for (String enemy : bossList) {
+                    bossEnemies.add(new ResourceLocation(enemy));
+                }
+            }
+
+        } catch (IOException e) {
+            System.err.println("Error loading config file: " + e.getMessage());
+            e.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("Error loading config file: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    public static int getMaxStoredEntities() {
-        return MAX_STORED_ENTITIES.get();
+    private static List<String> convertToList(String property) {
+        if (property == null) {
+            return null;
+        }
+        String cleanedProperty = property.trim();
+        if (cleanedProperty.startsWith("[") && cleanedProperty.endsWith("]")) {
+            cleanedProperty = cleanedProperty.substring(1, cleanedProperty.length() - 1);
+        }
+        String[] items = cleanedProperty.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)");
+        List<String> list = new java.util.ArrayList<>();
+        for (String item : items) {
+            list.add(item.trim().replace("\"", ""));
+        }
+        return list;
     }
 
-    public static boolean areParticleEffectsEnabled() {
-        return ENABLE_PARTICLE_EFFECTS.get();
+    public static boolean isNormalEnemy(ResourceLocation entity) {
+        return normalEnemies.contains(entity);
     }
 
-    public static int getSummonCooldown() {
-        return SUMMON_COOLDOWN.get();
+    public static boolean isMinibossEnemy(ResourceLocation entity) {
+        return minibossEnemies.contains(entity);
+    }
+
+    public static boolean isBossEnemy(ResourceLocation entity) {
+        return bossEnemies.contains(entity);
     }
 }

@@ -1,220 +1,337 @@
 package com.SoloLevelingSystem.storage;
 
-import com.SoloLevelingSystem.SoloLevelingSystem;
-import net.minecraft.core.registries.Registries;
+import com.SoloLevelingSystem.configs.ConfigManager;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.storage.DimensionDataStorage;
+import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.SoloLevelingSystem.events.EventHandler;
+import net.minecraft.nbt.ListTag;
+import java.util.Random;
+import java.util.UUID;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import net.minecraft.world.level.Level;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-
+@Mod.EventBusSubscriber
 public class EntityStorage {
     private static final Logger LOGGER = LoggerFactory.getLogger(EntityStorage.class);
-    private static final String STORAGE_KEY = SoloLevelingSystem.MODID + "_stored_entities";
+    private static Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities = new HashMap<>();
+    private static Map<UUID, List<Entity>> spawnedEntities = new HashMap<>(); // Track spawned entities
 
-    // Almacenamiento principal de entidades por dimensión y UUID del invocador
-    private static final Map<String, Map<UUID, List<StoredEntityData>>> playerStoredEntities = new ConcurrentHashMap<>();
+    private static final int MAX_NORMAL_ENEMIES = 10;
+    private static final int MAX_MINIBOSSES = 1;
+    private static final int MAX_BOSSES = 1;
+    private static final String DATA_NAME = "SoloLevelingEntityStorage";
+    private static final Random RANDOM = new Random();
+    private static final double SPAWN_RADIUS = 2.0;
 
-    // Registro de entidades invocadas
-    private static final Set<UUID> summonedEntities = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    // Registro de propietarios de entidades
-    private static final Map<UUID, UUID> entityOwners = new ConcurrentHashMap<>();
+    public static void storeEntity(UUID playerUUID, Entity entity, CompoundTag entityData) {
+        ResourceLocation entityResourceLocation = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
 
-    public static class StoredEntityData {
-        private final ResourceLocation entityType;
-        private final CompoundTag entityData;
-        private final Vec3 position;
-        private final UUID ownerUUID;
-        private final long timestamp;
-
-        public StoredEntityData(ResourceLocation entityType, CompoundTag entityData, Vec3 position, UUID ownerUUID) {
-            this.entityType = entityType;
-            this.entityData = entityData;
-            this.position = position;
-            this.ownerUUID = ownerUUID;
-            this.timestamp = System.currentTimeMillis();
-        }
-
-        public ResourceLocation getEntityType() { return entityType; }
-        public CompoundTag getEntityData() { return entityData; }
-        public Vec3 getPosition() { return position; }
-        public UUID getOwnerUUID() { return ownerUUID; }
-        public long getTimestamp() { return timestamp; }
-    }
-
-    // Método para verificar si una entidad es invocada
-    public static boolean isSummonedEntity(UUID entityUUID) {
-        if (entityUUID == null) return false;
-        return summonedEntities.contains(entityUUID);
-    }
-
-    // Método para marcar una entidad como invocada
-    public static void markAsSummoned(Entity entity, UUID ownerUUID) {
-        if (entity == null || entity.getUUID() == null) return;
-
-        summonedEntities.add(entity.getUUID());
-        if (ownerUUID != null) {
-            entityOwners.put(entity.getUUID(), ownerUUID);
-        }
-        LOGGER.debug("Entity {} marked as summoned by {}", entity.getUUID(), ownerUUID);
-    }
-
-    // Método para remover una entidad invocada
-    public static void removeSummonedEntity(UUID entityUUID) {
-        if (entityUUID == null) return;
-
-        summonedEntities.remove(entityUUID);
-        entityOwners.remove(entityUUID);
-        LOGGER.debug("Entity {} removed from summoned tracking", entityUUID);
-    }
-
-    // Método para obtener el propietario de una entidad
-    public static UUID getEntityOwner(UUID entityUUID) {
-        return entityOwners.get(entityUUID);
-    }
-
-    // Método principal para almacenar una entidad
-    public static void storeEntity(UUID ownerUUID, Entity entity, CompoundTag additionalData) {
-        if (!(entity.level() instanceof ServerLevel) || ownerUUID == null) {
-            LOGGER.warn("Invalid conditions for storing entity");
+        if (entityResourceLocation == null) {
+            LOGGER.error("Entity Resource Location is null for entity: {}", entity);
             return;
         }
 
-        ServerLevel serverLevel = (ServerLevel) entity.level();
-        String dimensionKey = serverLevel.dimension().location().toString();
+        Map<ResourceLocation, List<CompoundTag>> playerEntityMap = playerEntities.computeIfAbsent(playerUUID, k -> new HashMap<>());
+        List<CompoundTag> entityList = playerEntityMap.computeIfAbsent(entityResourceLocation, k -> new ArrayList<>());
 
-        ResourceLocation entityId = serverLevel.registryAccess()
-                .registryOrThrow(Registries.ENTITY_TYPE)
-                .getKey(entity.getType());
+        int maxEntities = 0;
+        if (ConfigManager.isNormalEnemy(entityResourceLocation)) {
+            maxEntities = MAX_NORMAL_ENEMIES;
+        } else if (ConfigManager.isMinibossEnemy(entityResourceLocation)) {
+            maxEntities = MAX_MINIBOSSES;
+        } else if (ConfigManager.isBossEnemy(entityResourceLocation)) {
+            maxEntities = MAX_BOSSES;
+        }
 
-        if (entityId == null) {
-            LOGGER.error("Failed to get entity ID for type: {}", entity.getType());
+        if (entityList.size() >= maxEntities) {
+            LOGGER.warn("Player {} has reached the maximum entity storage limit for entity type {}.", playerUUID, entityResourceLocation);
             return;
         }
 
-        CompoundTag entityData = new CompoundTag();
-        if (!entity.save(entityData)) {
-            LOGGER.error("Failed to save entity data for: {}", entity);
-            return;
-        }
-
-        // Combinar datos adicionales si existen
-        if (additionalData != null) {
-            entityData.merge(additionalData);
-        }
-
-        Vec3 position = entity.position();
-        StoredEntityData storedData = new StoredEntityData(entityId, entityData, position, ownerUUID);
-
-        // Almacenar la entidad
-        playerStoredEntities
-                .computeIfAbsent(dimensionKey, k -> new ConcurrentHashMap<>())
-                .computeIfAbsent(ownerUUID, k -> new ArrayList<>())
-                .add(storedData);
-
-        LOGGER.info("Stored entity {} for owner {} in dimension {}", entityId, ownerUUID, dimensionKey);
+        entityList.add(entityData);
+        LOGGER.debug("Storing entity data for player: {} - {}", playerUUID, entityResourceLocation);
+        markDirty();
     }
 
-    // Método para hacer spawn de las entidades almacenadas
-    public static void spawnStoredEntities(ServerPlayer player) {
-        ServerLevel serverLevel = player.serverLevel();
-        String dimensionKey = serverLevel.dimension().location().toString();
+    public static void spawnStoredEntities(Player player) {
         UUID playerUUID = player.getUUID();
+        LOGGER.debug("Attempting to spawn entities for player: {}", playerUUID);
 
-        Map<UUID, List<StoredEntityData>> dimensionStorage = playerStoredEntities.get(dimensionKey);
-        if (dimensionStorage == null || !dimensionStorage.containsKey(playerUUID)) {
-            LOGGER.debug("No stored entities found for player {} in dimension {}", playerUUID, dimensionKey);
-            return;
-        }
+        ServerLevel serverLevel = (ServerLevel) player.level();
 
-        List<StoredEntityData> storedEntities = dimensionStorage.get(playerUUID);
-        List<StoredEntityData> failedSpawns = new ArrayList<>();
+        if (spawnedEntities.containsKey(playerUUID) && !spawnedEntities.get(playerUUID).isEmpty()) {
+            LOGGER.debug("Player {} has existing spawned entities. Removing and respawning.", playerUUID);
 
-        for (StoredEntityData storedData : storedEntities) {
-            try {
-                Entity entity = createEntity(storedData.getEntityType(), serverLevel);
-                if (entity == null) continue;
+            // 1. Remove existing entities and save their NBT data
+            List<Entity> existingEntities = spawnedEntities.get(playerUUID);
+            List<CompoundTag> savedEntityData = new ArrayList<>();
+            for (Entity entity : existingEntities) {
+                CompoundTag entityData = new CompoundTag();
+                entity.save(entityData);
+                savedEntityData.add(entityData);
+                entity.remove(Entity.RemovalReason.DISCARDED);
+                LOGGER.debug("Removed existing entity and saved NBT data: {}", entity);
+            }
+            spawnedEntities.remove(playerUUID);
 
-                // Cargar datos y posición
-                entity.load(storedData.getEntityData().copy());
-                Vec3 pos = storedData.getPosition();
-                entity.setPos(pos.x, pos.y, pos.z);
+            // 2. Spawn new entities using the saved NBT data
+            List<Entity> currentSpawnedEntities = new ArrayList<>();
+            for (CompoundTag entityData : savedEntityData) {
+                try {
+                    if (!entityData.contains("id", 8)) {  // 8 is the Tag ID for a String
+                        LOGGER.error("Entity NBT data missing 'id' tag! Data: {}", entityData);
+                        continue;
+                    }
 
-                // Marcar como entidad invocada
-                markAsSummoned(entity, playerUUID);
+                    String entityIdString = entityData.getString("id");
+                    if (entityIdString == null || entityIdString.isEmpty()) {
+                        LOGGER.error("Entity NBT data has empty or null 'id' tag! Data: {}", entityData);
+                        continue;
+                    }
 
-                if (serverLevel.tryAddFreshEntityWithPassengers(entity)) {
-                    LOGGER.info("Successfully spawned entity {} for player {}",
-                            storedData.getEntityType(), playerUUID);
-                } else {
-                    failedSpawns.add(storedData);
+                    ResourceLocation entityResourceLocation = ResourceLocation.tryParse(entityIdString);
+
+                    if (entityResourceLocation == null) {
+                        LOGGER.error("Could not parse ResourceLocation from id: {}", entityIdString);
+                        continue;
+                    }
+
+                    EntityType<?> entityType =  BuiltInRegistries.ENTITY_TYPE.get(entityResourceLocation);
+
+                    if (entityType == null) {
+                        LOGGER.error("Could not find entity type {} in registry", entityResourceLocation);
+                        continue;
+                    }
+
+                    Entity entity = entityType.create(serverLevel);
+
+                    if (entity == null) {
+                        LOGGER.error("Failed to create entity of type {}", entityType);
+                        continue;
+                    }
+
+                    entity.load(entityData);
+
+                    double x = player.getX() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
+                    double y = player.getY();
+                    double z = player.getZ() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
+
+                    entity.setPos(x, y, z);
+                    serverLevel.addFreshEntity(entity);
+                    LOGGER.debug("Respawned entity from saved NBT data: {}", entity);
+                    currentSpawnedEntities.add(entity);
+
+                } catch (Exception e) {
+                    LOGGER.error("Failed to respawn entity", e);
                 }
-            } catch (Exception e) {
-                LOGGER.error("Error spawning entity: {}", e.getMessage());
-                failedSpawns.add(storedData);
             }
-        }
+            spawnedEntities.put(playerUUID, currentSpawnedEntities);
 
-        // Actualizar almacenamiento con las entidades que fallaron
-        if (!failedSpawns.isEmpty()) {
-            dimensionStorage.put(playerUUID, failedSpawns);
         } else {
-            dimensionStorage.remove(playerUUID);
-            if (dimensionStorage.isEmpty()) {
-                playerStoredEntities.remove(dimensionKey);
+            LOGGER.debug("Player {} has no existing spawned entities. Spawning from stored data.", playerUUID);
+
+            if (playerEntities.containsKey(playerUUID) && !playerEntities.get(playerUUID).isEmpty()) {
+                Map<ResourceLocation, List<CompoundTag>> playerEntityMap = playerEntities.get(playerUUID);
+                List<Entity> currentSpawnedEntities = new ArrayList<>();
+
+                for (Map.Entry<ResourceLocation, List<CompoundTag>> entry : playerEntityMap.entrySet()) {
+                    ResourceLocation entityResourceLocation = entry.getKey();
+                    List<CompoundTag> entitiesToSpawn = entry.getValue();
+                    LOGGER.debug("Spawning entities of type {}: {}", entityResourceLocation, entitiesToSpawn.size());
+
+                    for (CompoundTag entityData : entitiesToSpawn) {
+                        try {
+                            EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(entityResourceLocation);
+                            if (entityType == null) {
+                                LOGGER.error("Could not find entity type {} in registry", entityResourceLocation);
+                                continue;
+                            }
+                            Entity entity = entityType.create(serverLevel);
+                            if (entity == null) {
+                                LOGGER.error("Failed to create entity of type {}", entityType);
+                                continue;
+                            }
+                            entity.load(entityData);
+
+                            double x = player.getX() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
+                            double y = player.getY();
+                            double z = player.getZ() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
+
+                            entity.setPos(x, y, z);
+                            serverLevel.addFreshEntity(entity);
+                            LOGGER.debug("Spawned entity: {}", entity);
+                            currentSpawnedEntities.add(entity);
+
+                        } catch (Exception e) {
+                            LOGGER.error("Failed to spawn entity", e);
+                        }
+                    }
+                }
+                spawnedEntities.put(playerUUID, currentSpawnedEntities);
+            } else {
+                LOGGER.debug("Player {} has no entities stored.", playerUUID);
             }
         }
     }
 
-    private static Entity createEntity(ResourceLocation entityTypeId, ServerLevel world) {
-        EntityType<?> type = world.registryAccess()
-                .registryOrThrow(Registries.ENTITY_TYPE)
-                .get(entityTypeId);
 
-        if (type == null) {
-            LOGGER.error("Unknown entity type: {}", entityTypeId);
-            return null;
+    public static boolean hasEntities(UUID playerUUID) {
+        return playerEntities.containsKey(playerUUID) && !playerEntities.get(playerUUID).isEmpty();
+    }
+
+    public static void clearEntities(UUID playerUUID) {
+        playerEntities.remove(playerUUID);
+        clearSpawnedEntities(playerUUID); // Also clear spawned entities when clearing stored entities
+        LOGGER.debug("Cleared entities for player: {}", playerUUID);
+        markDirty();
+    }
+
+    public static List<Entity> getPlayerEntities(UUID playerUUID) {
+        List<Entity> allEntities = new ArrayList<>();
+        if (playerEntities.containsKey(playerUUID)) {
+            Map<ResourceLocation, List<CompoundTag>> playerEntityMap = playerEntities.get(playerUUID);
+            for (List<CompoundTag> entityList : playerEntityMap.values()) {
+                // allEntities.addAll(entityList);
+            }
+        }
+        return allEntities;
+    }
+
+    // New method to clear spawned entities
+    public static void clearSpawnedEntities(UUID playerUUID) {
+        if (spawnedEntities.containsKey(playerUUID)) {
+            List<Entity> entitiesToRemove = spawnedEntities.get(playerUUID);
+            for (Entity entity : entitiesToRemove) {
+                entity.remove(Entity.RemovalReason.DISCARDED); // Remove the entity from the world
+                LOGGER.debug("Removed entity: {}", entity);
+            }
+            spawnedEntities.remove(playerUUID);
+            LOGGER.debug("Cleared spawned entities for player: {}", playerUUID);
+        } else {
+            LOGGER.debug("No spawned entities to clear for player: {}", playerUUID);
+        }
+    }
+
+    // Persistent State Management
+    private static EntityStorageState persistentState;
+
+    private static void markDirty() {
+        if (persistentState != null) {
+            persistentState.setDirty();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        MinecraftServer server = event.getServer();
+        DimensionDataStorage storage = server.getLevel(server.overworld().dimension()).getDataStorage();
+        persistentState = storage.computeIfAbsent(
+                tag -> {
+                    EntityStorageState state = EntityStorageState.create(tag, server.getLevel(server.overworld().dimension()));
+                    playerEntities = state.getPlayerEntities();
+                    return state;
+                },
+                () -> new EntityStorageState(new HashMap<>()),
+                DATA_NAME
+        );
+        playerEntities = persistentState.getPlayerEntities();
+        LOGGER.debug("Loaded entity storage from disk.");
+    }
+
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        LOGGER.debug("Saving entity storage to disk.");
+        markDirty();
+    }
+
+    public static class EntityStorageState extends SavedData {
+        private Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities;
+
+        public EntityStorageState(Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities) {
+            this.playerEntities = playerEntities;
         }
 
-        try {
-            return type.create(world);
-        } catch (Exception e) {
-            LOGGER.error("Failed to create entity of type {}: {}", entityTypeId, e.getMessage());
-            return null;
+        public Map<UUID, Map<ResourceLocation, List<CompoundTag>>> getPlayerEntities() {
+            return playerEntities;
         }
-    }
 
-    // Método para guardar todos los datos
-    public static void saveAllData() {
-        LOGGER.info("Saving all entity storage data...");
-        // Implementar lógica de guardado persistente si es necesario
-    }
+        public static EntityStorageState create(CompoundTag tag, ServerLevel level) {
+            Map<UUID, Map<ResourceLocation, List<CompoundTag>>> loadedEntities = new HashMap<>();
+            CompoundTag allPlayers = tag.getCompound("playerEntities");
 
-    // Método para limpiar todo el almacenamiento
-    public static void clearAllStorage() {
-        playerStoredEntities.clear();
-        summonedEntities.clear();
-        entityOwners.clear();
-        LOGGER.info("Cleared all entity storage data");
-    }
+            for (String playerKey : allPlayers.getAllKeys()) {
+                try {
+                    UUID playerUUID = UUID.fromString(playerKey);
+                    Map<ResourceLocation, List<CompoundTag>> playerEntityMap = new HashMap<>();
+                    CompoundTag entityTypeMapTag = allPlayers.getCompound(playerKey);
 
-    // Métodos de utilidad
-    public static int getStoredEntityCount(UUID playerUUID, String dimensionKey) {
-        return Optional.ofNullable(playerStoredEntities.get(dimensionKey))
-                .map(dim -> dim.getOrDefault(playerUUID, Collections.emptyList()).size())
-                .orElse(0);
-    }
+                    for (String entityTypeKey : entityTypeMapTag.getAllKeys()) {
+                        try {
+                            ResourceLocation entityType = new ResourceLocation(entityTypeKey);
+                            ListTag entityListTag = entityTypeMapTag.getList(entityTypeKey, 10); // 10 is the tag ID for CompoundTag
+                            List<CompoundTag> entityList = new ArrayList<>();
 
-    public static boolean hasStoredEntities(UUID playerUUID, String dimensionKey) {
-        return getStoredEntityCount(playerUUID, dimensionKey) > 0;
+                            for (int i = 0; i < entityListTag.size(); i++) {
+                                CompoundTag entityTag = entityListTag.getCompound(i);
+                                entityList.add(entityTag);
+                            }
+                            playerEntityMap.put(entityType, entityList);
+                        } catch (Exception e) {
+                            LOGGER.error("Error loading entity type {}: {}", entityTypeKey, e);
+                        }
+                    }
+                    loadedEntities.put(playerUUID, playerEntityMap);
+
+                } catch (IllegalArgumentException e) {
+                    LOGGER.error("Failed to load UUID: {}", playerKey, e);
+                }
+            }
+
+            return new EntityStorageState(loadedEntities);
+        }
+
+        @Override
+        public CompoundTag save(CompoundTag tag) {
+            CompoundTag allPlayers = new CompoundTag();
+            for (Map.Entry<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntry : playerEntities.entrySet()) {
+                UUID playerUUID = playerEntry.getKey();
+                Map<ResourceLocation, List<CompoundTag>> playerEntityMap = playerEntry.getValue();
+                CompoundTag entityTypeMapTag = new CompoundTag();
+
+                for (Map.Entry<ResourceLocation, List<CompoundTag>> entityTypeEntry : playerEntityMap.entrySet()) {
+                    ResourceLocation entityType = entityTypeEntry.getKey();
+                    List<CompoundTag> entityList = entityTypeEntry.getValue();
+                    ListTag entityListTag = new ListTag();
+
+                    for (CompoundTag entityTag : entityList) {
+                        entityListTag.add(entityTag);
+                    }
+                    entityTypeMapTag.put(entityType.toString(), entityListTag);
+                }
+                allPlayers.put(playerUUID.toString(), entityTypeMapTag);
+            }
+            tag.put("playerEntities", allPlayers);
+            return tag;
+        }
     }
 }

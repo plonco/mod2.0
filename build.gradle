@@ -8,133 +8,128 @@ plugins {
 
 group = 'com.SoloLevelingSystem'
 version = '1.0.0'
+sourceCompatibility = '17'
+
+archivesBaseName = 'solo_leveling_system'
 
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
+    toolchain.languageVersion.set(JavaLanguageVersion.of(17))
 }
 
 minecraft {
     mappings channel: 'official', version: '1.20.1'
-    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-
     runs {
         client {
-            workingDirectory = project.file('run')
+            workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-
-            arg "-mixin.config=solo_leveling_system.mixins.json"
-
             mods {
                 solo_leveling_system {
                     source sourceSets.main
                 }
             }
         }
-
         server {
-            workingDirectory = project.file('run')
+            workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
-
-            arg "-mixin.config=solo_leveling_system.mixins.json"
             args '--nogui'
-
             mods {
                 solo_leveling_system {
                     source sourceSets.main
                 }
             }
+        }
+        gameTestServer {
+            workingDirectory project.file('run')
+            property 'forge.enabledGameTestNamespaces', 'solo_leveling_system'
+            mods {
+                solo_leveling_system {
+                    source sourceSets.main
+                }
+            }
+        }
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', 'solo_leveling_system', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
         }
     }
+}
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
 }
 
 repositories {
     mavenCentral()
-    maven {
-        url = 'https://maven.minecraftforge.net/'
-        name = 'Forge'
-    }
-    maven {
-        url = 'https://repo.spongepowered.org/repository/maven-public/'
-        name = 'Sponge'
-    }
+    maven { url = 'https://maven.minecraftforge.net/' }
 }
 
 dependencies {
-    minecraft "net.minecraftforge:forge:1.20.1-47.3.0"
-    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
-}
-
-// Configuración específica de recursos
-sourceSets {
-    main {
-        resources {
-            srcDirs = ['src/main/resources']
-            exclude 'config/**' // Excluir la carpeta config del procesamiento normal
-        }
-    }
-}
-
-processResources {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-
-    inputs.property 'version', version
-
-    from(sourceSets.main.resources.srcDirs) {
-        include 'META-INF/mods.toml'
-        expand 'version': version
-    }
-
-    from(sourceSets.main.resources.srcDirs) {
-        exclude 'META-INF/mods.toml'
-        exclude 'config/**'
-    }
-
-    // Procesar archivos de configuración por separado
-    from(sourceSets.main.resources.srcDirs) {
-        include 'config/**'
-        duplicatesStrategy = DuplicatesStrategy.FAIL // Fallar si hay duplicados en config
-    }
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+    implementation 'com.electronwill.night-config:core:3.6.5'
+    implementation 'com.electronwill.night-config:toml:3.6.5'
 }
 
 jar {
+    manifest {
+        attributes([
+                'Specification-Title': 'SoloLevelingSystem',
+                'Specification-Vendor': 'plonco',
+                'Specification-Version': '1.0.0',
+                'Implementation-Title': project.name,
+                'Implementation-Version': project.version,
+                'Implementation-Vendor': 'plonco'
+        ])
+    }
+}
+
+tasks.named('processResources', ProcessResources).configure {
+    def replaceProperties = [
+            minecraft_version: '1.20.1',
+            forge_version: '47.3.32',
+            mod_id: 'solo_leveling_system',
+            mod_name: 'Solo Leveling System',
+            mod_license: 'MIT',
+            mod_version: '1.0.0',
+            mod_authors: 'plonco',
+            mod_description: 'A mod for solo leveling system in Minecraft'
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties + [project: project]
+    }
+}
+
+tasks.named('jar', Jar).configure {
     manifest {
         attributes([
                 'Specification-Title': 'solo_leveling_system',
                 'Specification-Vendor': 'plonco',
                 'Specification-Version': '1',
                 'Implementation-Title': project.name,
-                'Implementation-Version': version,
+                'Implementation-Version': project.jar.archiveVersion.get(),
                 'Implementation-Vendor': 'plonco',
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                'FMLModType': 'GAMELIBRARY',
-                'MixinConfigs': 'solo_leveling_system.mixins.json'
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
-
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     finalizedBy 'reobfJar'
 }
 
-// Tarea para limpiar archivos de configuración duplicados
-task cleanDuplicateConfigs {
-    doLast {
-        def configFiles = fileTree(dir: 'src/main/resources').include('**/config.toml').files +
-                fileTree(dir: 'config').include('**/config.toml').files
-
-        configFiles.groupBy { it.name }.each { name, files ->
-            if (files.size() > 1) {
-                files.drop(1).each {
-                    it.delete()
-                    println "Deleted duplicate config file: ${it.absolutePath}"
-                }
-            }
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
         }
     }
 }
 
-// Asegurar que la limpieza de duplicados se ejecute antes de processResources
-processResources.dependsOn cleanDuplicateConfigs
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
