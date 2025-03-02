@@ -207,32 +207,33 @@ public class EntityStorage {
                         mob.setPersistenceRequired();
                         mob.setNoAi(false);
 
-                        // Limpiar efectos y estados para todas las entidades
-                        mob.removeAllEffects();          // Elimina todos los efectos de poción
-                        mob.clearFire();                 // Elimina el fuego
-                        mob.setRemainingFireTicks(0);    // Asegura que no se prenda fuego
-                        mob.setInvulnerable(false);      // Asegura que no sea invulnerable
-                        mob.setAirSupply(mob.getMaxAirSupply()); // Máximo aire para respirar
+                        // Limpiar efectos y estados básicos
+                        mob.removeAllEffects();
+                        mob.clearFire();
+                        mob.setRemainingFireTicks(0);
+                        mob.setInvulnerable(false);
+                        mob.setAirSupply(mob.getMaxAirSupply());
 
-                        // Limpiar los objetivos existentes
-                        mob.goalSelector.getAvailableGoals().clear();
-                        mob.targetSelector.getAvailableGoals().clear();
+                        // NO limpiar los objetivos existentes
+                        // mob.goalSelector.getAvailableGoals().clear();
+                        // mob.targetSelector.getAvailableGoals().clear();
 
-                        // Agregar el objetivo de seguir al jugador con prioridad alta
-                        mob.goalSelector.addGoal(1, new CustomFollowPlayerGoal(
+                        // Agregar nuestros objetivos con prioridad alta pero sin eliminar los existentes
+                        mob.goalSelector.addGoal(0, new CustomFollowPlayerGoal(
                                 mob,
                                 player,
-                                1.0D,    // Velocidad de movimiento
-                                10.0F,   // Distancia máxima
-                                2.0F     // Distancia mínima
+                                1.0D,
+                                10.0F,
+                                2.0F
                         ));
 
-                        // Configurar comportamientos según el tipo de mob
                         if (mob instanceof PathfinderMob pathfinderMob) {
+                            // Agregar comportamientos de combate y movimiento
                             pathfinderMob.goalSelector.addGoal(2, new MeleeAttackGoal(pathfinderMob, 1.2D, true));
                             pathfinderMob.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(pathfinderMob, 1.0D));
                             pathfinderMob.goalSelector.addGoal(4, new RandomLookAroundGoal(pathfinderMob));
 
+                            // Agregar comportamientos de objetivo
                             pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
                             pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob, LivingEntity.class, 10, true, false, (target) -> {
                                 if (target instanceof Player) return false;
@@ -241,26 +242,11 @@ public class EntityStorage {
                                 if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
                                 return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
                             }));
-                        } else {
-                            mob.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(mob, LivingEntity.class, 0, true, false, (target) -> {
-                                if (target instanceof Player) return false;
-                                if (target.getTags().contains("friendly")) return false;
-                                if (target.getTags().contains("summoned")) return false;
-                                if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
-                                return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
-                            }));
                         }
 
-                        // Si es domesticable, hacerla del jugador
-                        if (mob instanceof TamableAnimal tamable) {
-                            tamable.tame(player);
-                            tamable.setOwnerUUID(player.getUUID());
-                        }
-
-                        // Añadir tag para identificación
+                        // Añadir tags
                         entity.addTag("friendly");
                         entity.addTag("summoned");
-                        mob.clearFire();
                     }
                     // Añadir la entidad al mundo
                     if (serverLevel.addFreshEntity(entity)) {
