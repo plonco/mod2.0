@@ -41,7 +41,7 @@ public class SoloLevelingSystem {
     public SoloLevelingSystem() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // Registrar el método commonSetup para la configuración y el canal de red
+
         modEventBus.addListener(this::commonSetup);
 
         // Registrar eventos de Forge
