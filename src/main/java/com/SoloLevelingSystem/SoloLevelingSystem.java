@@ -2,6 +2,7 @@ package com.SoloLevelingSystem;
 
 import com.SoloLevelingSystem.configs.ConfigManager;
 import com.SoloLevelingSystem.entity.ai.CustomFollowPlayerGoal;
+import com.SoloLevelingSystem.events.EntityDamageHandler;
 import com.SoloLevelingSystem.events.EventHandler;
 import com.SoloLevelingSystem.events.CombatEventHandler;
 import com.SoloLevelingSystem.network.SpawnEntitiesMessage;
@@ -56,6 +57,7 @@ public class SoloLevelingSystem {
         MinecraftForge.EVENT_BUS.register(new EventHandler());
         MinecraftForge.EVENT_BUS.register(new CombatEventHandler()); // Registramos el nuevo manejador de combate
         MinecraftForge.EVENT_BUS.register(EntityStorage.class);
+        MinecraftForge.EVENT_BUS.register(new EntityDamageHandler());
 
         LOGGER.info("Solo Leveling System Mod initialized successfully");
     }

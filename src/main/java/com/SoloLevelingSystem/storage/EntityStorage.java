@@ -12,6 +12,7 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
@@ -206,6 +207,13 @@ public class EntityStorage {
                         mob.setPersistenceRequired();
                         mob.setNoAi(false);
 
+                        // Limpiar efectos y estados para todas las entidades
+                        mob.removeAllEffects();          // Elimina todos los efectos de poción
+                        mob.clearFire();                 // Elimina el fuego
+                        mob.setRemainingFireTicks(0);    // Asegura que no se prenda fuego
+                        mob.setInvulnerable(false);      // Asegura que no sea invulnerable
+                        mob.setAirSupply(mob.getMaxAirSupply()); // Máximo aire para respirar
+
                         // Limpiar los objetivos existentes
                         mob.goalSelector.getAvailableGoals().clear();
                         mob.targetSelector.getAvailableGoals().clear();
@@ -221,43 +229,26 @@ public class EntityStorage {
 
                         // Configurar comportamientos según el tipo de mob
                         if (mob instanceof PathfinderMob pathfinderMob) {
-                            // Para mobs que pueden hacer pathfinding
                             pathfinderMob.goalSelector.addGoal(2, new MeleeAttackGoal(pathfinderMob, 1.2D, true));
                             pathfinderMob.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(pathfinderMob, 1.0D));
                             pathfinderMob.goalSelector.addGoal(4, new RandomLookAroundGoal(pathfinderMob));
 
-                            // Comportamiento de ataque para PathfinderMob
                             pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
                             pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob, LivingEntity.class, 10, true, false, (target) -> {
-                                if (target instanceof Player) return false; // No atacar a jugadores
+                                if (target instanceof Player) return false;
+                                if (target.getTags().contains("friendly")) return false;
+                                if (target.getTags().contains("summoned")) return false;
                                 if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
                                 return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
                             }));
                         } else {
-                            // Para mobs que no son PathfinderMob, usar comportamiento básico
-                            mob.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(
-                                    mob,
-                                    LivingEntity.class,
-                                    0,
-                                    true,
-                                    false,
-                                    (target) -> {
-                                        // No atacar a jugadores
-                                        if (target instanceof Player) return false;
-
-                                        // No atacar a otras entidades amistosas
-                                        if (target.getTags().contains("friendly")) return false;
-
-                                        // No atacar a otras entidades invocadas por el mismo jugador
-                                        if (target.getTags().contains("summoned")) return false;
-
-                                        // Atacar a mobs que están atacando al jugador
-                                        if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
-
-                                        // Atacar solo al último mob que el jugador atacó o que atacó al jugador
-                                        return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
-                                    }
-                            ));
+                            mob.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(mob, LivingEntity.class, 0, true, false, (target) -> {
+                                if (target instanceof Player) return false;
+                                if (target.getTags().contains("friendly")) return false;
+                                if (target.getTags().contains("summoned")) return false;
+                                if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
+                                return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
+                            }));
                         }
 
                         // Si es domesticable, hacerla del jugador
@@ -269,6 +260,7 @@ public class EntityStorage {
                         // Añadir tag para identificación
                         entity.addTag("friendly");
                         entity.addTag("summoned");
+                        mob.clearFire();
                     }
                     // Añadir la entidad al mundo
                     if (serverLevel.addFreshEntity(entity)) {
