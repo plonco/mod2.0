@@ -54,8 +54,12 @@ minecraft {
     }
 }
 
-sourceSets.main.resources {
-    srcDir 'src/generated/resources'
+sourceSets {
+    main {
+        resources {
+            srcDir 'src/generated/resources'
+        }
+    }
 }
 
 repositories {
@@ -76,7 +80,8 @@ shadowJar {
     archiveClassifier.set("")
     archiveVersion.set(version)
 
-    relocate 'com.moandjiezana.toml', 'shadow.com.moandjiezana.toml'
+    // Removed relocation for toml4j to ensure com.moandjiezana.toml.Toml is available at runtime.
+    // relocate 'com.moandjiezana.toml', 'shadow.com.moandjiezana.toml'
 
     // Use a merge strategy to handle potential conflicts
     mergeServiceFiles {
@@ -122,24 +127,39 @@ gradle.taskGraph.whenReady {
     }
 }
 
-tasks.named('processResources', ProcessResources).configure {
-    def replaceProperties = [
-            minecraft_version : '1.20.1',
-            forge_version     : '47.3.0',
-            mod_id            : 'solo_leveling_system',
-            mod_name          : 'Solo Leveling System',
-            mod_license       : 'MIT',
-            mod_version       : '1.0.0',
-            mod_authors       : 'plonco',
-            mod_description   : 'A mod for solo leveling system in Minecraft',
-            loader_version_range: '[47.3.0,)',
-            forge_version_range: '[47.3.0,)',
-            minecraft_version_range: '[1.20.1]'
-    ]
-    inputs.properties replaceProperties
+ext {
+    minecraft_version        = '1.20.1'
+    forge_version            = '47.3.0'
+    mod_id                   = 'solo_leveling_system'
+    mod_name                 = 'Solo Leveling System'
+    mod_license              = 'MIT'
+    mod_version              = version  // Use the version defined above
+    mod_authors              = 'plonco'
+    mod_description          = 'A mod for solo leveling system in Minecraft'
+    loader_version_range     = '[47,)'   // Be more flexible
+    forge_version_range      = '[47.3.0,)'
+    minecraft_version_range  = '[1.20.1]'
+}
 
+// Create a map of mod properties to pass to processResources.
+def modProperties = [
+        minecraft_version       : minecraft_version,
+        forge_version           : forge_version,
+        mod_id                  : mod_id,
+        mod_name                : mod_name,
+        mod_license             : mod_license,
+        mod_version             : mod_version,
+        mod_authors             : mod_authors,
+        mod_description         : mod_description,
+        loader_version_range    : loader_version_range,
+        forge_version_range     : forge_version_range,
+        minecraft_version_range : minecraft_version_range
+]
+
+tasks.named("processResources", ProcessResources).configure {
+    inputs.properties modProperties
     filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
+        expand modProperties + [project: project]
     }
 }
 
@@ -165,7 +185,7 @@ task verifyShadowJar {
     doLast {
         javaexec {
             classpath = files(shadowJar.archiveFile.get())
-            mainClass = 'com.SoloLevelingSystem.VerifyShadowJar' // Replace with a class in your mod
+            mainClass = 'com.SoloLevelingSystem.VerifyShadowJar' // Replace with an actual class in your mod
         }
     }
 }

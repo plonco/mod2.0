@@ -26,10 +26,3 @@ mandatory=true
 versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
-
-[[dependencies.${mod_id}]]
-modId="java"
-mandatory=true
-versionRange="[17,)"
-ordering="NONE"
-side="BOTH"
