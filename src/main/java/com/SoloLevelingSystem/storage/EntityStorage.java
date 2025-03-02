@@ -295,6 +295,15 @@ public class EntityStorage {
         markDirty();
     }
 
+    @SubscribeEvent
+    public static void onPlayerLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        Player player = event.getEntity();
+        UUID playerUUID = player.getUUID();
+
+        LOGGER.debug("Player {} disconnected, removing their spawned entities", player.getName().getString());
+        clearSpawnedEntities(playerUUID);
+    }
+    
     public static List<Entity> getLivingPlayerEntities(UUID playerUUID) {
         return spawnedEntities.getOrDefault(playerUUID, new ArrayList<>()).stream()
                 .filter(entity -> entity != null && entity.isAlive())
