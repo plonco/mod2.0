@@ -2,16 +2,16 @@ package com.SoloLevelingSystem.storage;
 
 import com.SoloLevelingSystem.SoloLevelingSystem;
 import com.SoloLevelingSystem.configs.ConfigManager;
+import com.SoloLevelingSystem.entity.ai.CustomFollowPlayerGoal;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.goal.*;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
@@ -199,11 +199,66 @@ public class EntityStorage {
                     entity.setPos(x, y, z);
 
                     // Hacer la entidad amistosa
+
+
                     if (entity instanceof Mob mob) {
                         mob.setTarget(null);
                         mob.setPersistenceRequired();
-                        mob.setAggressive(false);
-                        mob.setNoAi(false);  // Asegurarnos de que la IA esté activa
+                        mob.setNoAi(false);
+
+                        // Limpiar los objetivos existentes
+                        mob.goalSelector.getAvailableGoals().clear();
+                        mob.targetSelector.getAvailableGoals().clear();
+
+                        // Agregar el objetivo de seguir al jugador con prioridad alta
+                        mob.goalSelector.addGoal(1, new CustomFollowPlayerGoal(
+                                mob,
+                                player,
+                                1.0D,    // Velocidad de movimiento
+                                10.0F,   // Distancia máxima
+                                2.0F     // Distancia mínima
+                        ));
+
+                        // Configurar comportamientos según el tipo de mob
+                        if (mob instanceof PathfinderMob pathfinderMob) {
+                            // Para mobs que pueden hacer pathfinding
+                            pathfinderMob.goalSelector.addGoal(2, new MeleeAttackGoal(pathfinderMob, 1.2D, true));
+                            pathfinderMob.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(pathfinderMob, 1.0D));
+                            pathfinderMob.goalSelector.addGoal(4, new RandomLookAroundGoal(pathfinderMob));
+
+                            // Comportamiento de ataque para PathfinderMob
+                            pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
+                            pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob, LivingEntity.class, 10, true, false, (target) -> {
+                                if (target instanceof Player) return false; // No atacar a jugadores
+                                if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
+                                return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
+                            }));
+                        } else {
+                            // Para mobs que no son PathfinderMob, usar comportamiento básico
+                            mob.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(
+                                    mob,
+                                    LivingEntity.class,
+                                    0,
+                                    true,
+                                    false,
+                                    (target) -> {
+                                        // No atacar a jugadores
+                                        if (target instanceof Player) return false;
+
+                                        // No atacar a otras entidades amistosas
+                                        if (target.getTags().contains("friendly")) return false;
+
+                                        // No atacar a otras entidades invocadas por el mismo jugador
+                                        if (target.getTags().contains("summoned")) return false;
+
+                                        // Atacar a mobs que están atacando al jugador
+                                        if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
+
+                                        // Atacar solo al último mob que el jugador atacó o que atacó al jugador
+                                        return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
+                                    }
+                            ));
+                        }
 
                         // Si es domesticable, hacerla del jugador
                         if (mob instanceof TamableAnimal tamable) {
@@ -213,8 +268,8 @@ public class EntityStorage {
 
                         // Añadir tag para identificación
                         entity.addTag("friendly");
+                        entity.addTag("summoned");
                     }
-
                     // Añadir la entidad al mundo
                     if (serverLevel.addFreshEntity(entity)) {
                         currentSpawnedEntities.add(entity);
@@ -303,7 +358,7 @@ public class EntityStorage {
         LOGGER.debug("Player {} disconnected, removing their spawned entities", player.getName().getString());
         clearSpawnedEntities(playerUUID);
     }
-    
+
     public static List<Entity> getLivingPlayerEntities(UUID playerUUID) {
         return spawnedEntities.getOrDefault(playerUUID, new ArrayList<>()).stream()
                 .filter(entity -> entity != null && entity.isAlive())
