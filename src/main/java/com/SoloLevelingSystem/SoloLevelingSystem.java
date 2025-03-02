@@ -11,7 +11,6 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
-
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.network.NetworkRegistry;
@@ -24,59 +23,56 @@ public class SoloLevelingSystem {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String PROTOCOL_VERSION = "1";
 
-
-    // Canal de red para comunicación entre cliente y servidor
-    public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation(MODID, "main"), // Identificador único del canal
-            () -> PROTOCOL_VERSION, // Versión del protocolo
-            PROTOCOL_VERSION::equals, // Predicado para aceptar versiones del servidor
-            PROTOCOL_VERSION::equals  // Predicado para aceptar versiones del cliente
-
-
-
-    );
-
-    private static int messageID = 0;
+    private static SimpleChannel CHANNEL;
 
     public SoloLevelingSystem() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
-
-
         modEventBus.addListener(this::commonSetup);
-
-        // Registrar eventos de Forge
         MinecraftForge.EVENT_BUS.register(this);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // Cargar la configuración
-        ConfigManager.loadConfig();
-        LOGGER.info("Configuration loaded successfully.");
+        // Inicializar el canal de red en un hilo seguro
+        event.enqueueWork(() -> {
+            CHANNEL = NetworkRegistry.newSimpleChannel(
+                    new ResourceLocation(MODID, "main"),
+                    () -> PROTOCOL_VERSION,
+                    PROTOCOL_VERSION::equals,
+                    PROTOCOL_VERSION::equals
+            );
 
-        // Registrar mensajes en el canal de red
-        CHANNEL.registerMessage(
-                messageID++,
-                SpawnEntitiesMessage.class,
-                SpawnEntitiesMessage::encode,
-                SpawnEntitiesMessage::new,
-                SpawnEntitiesMessage::handle
-        );
-        LOGGER.info("Registered SpawnEntitiesMessage");
+            // Registrar mensajes
+            CHANNEL.registerMessage(
+                    0, // ID fijo para el mensaje
+                    SpawnEntitiesMessage.class,
+                    SpawnEntitiesMessage::encode,
+                    SpawnEntitiesMessage::new,
+                    SpawnEntitiesMessage::handle
+            );
+
+            LOGGER.info("Network channel initialized and messages registered");
+        });
+
+        // Cargar configuración
+        ConfigManager.loadConfig();
+        LOGGER.info("Configuration loaded successfully");
     }
 
-    // Evento para cuando el servidor se inicia
+    public static SimpleChannel getChannel() {
+        return CHANNEL;
+    }
+
     @SubscribeEvent
     public void onServerStarting(ServerStartedEvent event) {
         ConfigManager.loadConfig();
-        LOGGER.info("Configuración recargada exitosamente");
+        LOGGER.info("Configuration reloaded successfully");
     }
 
-    // Eventos del cliente (opcional, si necesitas configuración específica del cliente)
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
-            LOGGER.info("HELLO from client setup");
+            LOGGER.info("Initializing client setup");
         }
     }
 }
