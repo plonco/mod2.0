@@ -1,13 +1,19 @@
 package com.SoloLevelingSystem.storage;
 
 import com.SoloLevelingSystem.SoloLevelingSystem;
+import com.SoloLevelingSystem.client.render.SummonedEntityLayer;
 import com.SoloLevelingSystem.configs.ConfigManager;
 import com.SoloLevelingSystem.entity.ai.CustomFollowPlayerGoal;
+import com.SoloLevelingSystem.events.EntityVisualEffects;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
@@ -34,13 +40,8 @@ public class EntityStorage {
     private static final Random RANDOM = new Random();
     private static final double SPAWN_RADIUS = 3.0;
 
-    // Almacenamiento principal de entidades por jugador
     private static Map<UUID, Map<ResourceLocation, List<CompoundTag>>> playerEntities = new HashMap<>();
-
-    // Entidades actualmente invocadas
     private static final Map<UUID, List<Entity>> spawnedEntities = new HashMap<>();
-
-    // Rastreo de mensajes de límite mostrados
     private static final Map<UUID, Set<ResourceLocation>> shownLimitMessages = new HashMap<>();
 
     public static void clearLimitMessage(UUID playerUUID, ResourceLocation entityId) {
@@ -58,7 +59,6 @@ public class EntityStorage {
     public static boolean storeEntity(UUID playerUUID, LivingEntity entity, CompoundTag entityData) {
         ResourceLocation entityId = ForgeRegistries.ENTITY_TYPES.getKey(entity.getType());
 
-        // Verificar si la entidad está configurada
         if (!ConfigManager.isNormalEnemy(entityId) &&
                 !ConfigManager.isMinibossEnemy(entityId) &&
                 !ConfigManager.isBossEnemy(entityId)) {
@@ -66,22 +66,18 @@ public class EntityStorage {
             return false;
         }
 
-        // Obtener el límite para esta entidad específica
         int maxEntities = ConfigManager.getEntityLimit(entityId);
         if (maxEntities <= 0) {
             LOGGER.debug("Entity {} has no storage limit configured", entityId);
             return false;
         }
 
-        // Inicializar el mapa para el jugador si no existe
         playerEntities.computeIfAbsent(playerUUID, k -> new HashMap<>());
         Map<ResourceLocation, List<CompoundTag>> playerEntityMap = playerEntities.get(playerUUID);
 
-        // Inicializar la lista para esta entidad específica si no existe
         playerEntityMap.computeIfAbsent(entityId, k -> new ArrayList<>());
         List<CompoundTag> entityList = playerEntityMap.get(entityId);
 
-        // Verificar si se alcanzó el límite
         if (entityList.size() >= maxEntities) {
             markLimitMessageShown(playerUUID, entityId);
             LOGGER.warn("Player {} has reached the limit of {} entities for {}",
@@ -89,36 +85,25 @@ public class EntityStorage {
             return false;
         }
 
-        // Crear una copia limpia de los datos
         CompoundTag cleanData = new CompoundTag();
-
-        // Guardar solo los datos esenciales
         cleanData.putString("id", entityId.toString());
 
-        // Guardar atributos importantes si existen
         if (entityData.contains("Attributes")) {
             cleanData.put("Attributes", entityData.get("Attributes"));
         }
-
-        // Guardar equipamiento si existe
         if (entityData.contains("ArmorItems")) {
             cleanData.put("ArmorItems", entityData.get("ArmorItems"));
         }
         if (entityData.contains("HandItems")) {
             cleanData.put("HandItems", entityData.get("HandItems"));
         }
-
-        // Guardar datos personalizados si existen
         if (entityData.contains("Tags")) {
             cleanData.put("Tags", entityData.get("Tags"));
         }
-
-        // Guardar nombre personalizado si existe
         if (entityData.contains("CustomName")) {
             cleanData.put("CustomName", entityData.get("CustomName"));
         }
 
-        // Si se almacena exitosamente, limpiar el mensaje de límite
         clearLimitMessage(playerUUID, entityId);
         entityList.add(cleanData);
         markDirty();
@@ -136,7 +121,6 @@ public class EntityStorage {
         UUID playerUUID = player.getUUID();
         LOGGER.debug("Attempting to spawn stored entities for player: {}", playerUUID);
 
-        // Limpiar entidades previamente invocadas
         clearSpawnedEntities(playerUUID);
 
         if (!playerEntities.containsKey(playerUUID) || playerEntities.get(playerUUID).isEmpty()) {
@@ -168,57 +152,44 @@ public class EntityStorage {
                         continue;
                     }
 
-                    // Crear una copia de los datos para modificar
                     CompoundTag modifiedData = entityData.copy();
-
-                    // Asegurarnos de que la entidad esté viva
                     if (entity instanceof LivingEntity) {
-                        // Eliminar cualquier tag relacionado con la muerte
                         modifiedData.remove("DeathTime");
                         modifiedData.remove("DeathLootTable");
-                        modifiedData.remove("Health");  // Lo estableceremos manualmente después
+                        modifiedData.remove("Health");
                         modifiedData.remove("HurtTime");
                         modifiedData.remove("HurtByTimestamp");
-                        modifiedData.remove("Brain");  // Eliminar estado del cerebro previo
-
-                        // Establecer que la entidad está viva
+                        modifiedData.remove("Brain");
                         modifiedData.putBoolean("Dead", false);
                     }
 
-                    // Cargar los datos modificados
+                    // Preparar los tags antes de cargar la entidad
+                    ListTag tagsListPre = new ListTag();
+                    tagsListPre.add(StringTag.valueOf("friendly"));
+                    tagsListPre.add(StringTag.valueOf("summoned"));
+                    modifiedData.put("Tags", tagsListPre);
+
                     entity.load(modifiedData);
 
-                    // Configurar la salud al máximo si es una entidad viva
                     if (entity instanceof LivingEntity living) {
                         living.setHealth(living.getMaxHealth());
                     }
 
-                    // Posicionar cerca del jugador
                     double x = player.getX() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
                     double y = player.getY();
                     double z = player.getZ() + (RANDOM.nextDouble() * 2 - 1) * SPAWN_RADIUS;
                     entity.setPos(x, y, z);
 
-                    // Hacer la entidad amistosa
-
-
                     if (entity instanceof Mob mob) {
                         mob.setTarget(null);
                         mob.setPersistenceRequired();
                         mob.setNoAi(false);
-
-                        // Limpiar efectos y estados básicos
                         mob.removeAllEffects();
                         mob.clearFire();
                         mob.setRemainingFireTicks(0);
                         mob.setInvulnerable(false);
                         mob.setAirSupply(mob.getMaxAirSupply());
 
-                        // NO limpiar los objetivos existentes
-                        // mob.goalSelector.getAvailableGoals().clear();
-                        // mob.targetSelector.getAvailableGoals().clear();
-
-                        // Agregar nuestros objetivos con prioridad alta pero sin eliminar los existentes
                         mob.goalSelector.addGoal(0, new CustomFollowPlayerGoal(
                                 mob,
                                 player,
@@ -228,14 +199,13 @@ public class EntityStorage {
                         ));
 
                         if (mob instanceof PathfinderMob pathfinderMob) {
-                            // Agregar comportamientos de combate y movimiento
                             pathfinderMob.goalSelector.addGoal(2, new MeleeAttackGoal(pathfinderMob, 1.2D, true));
                             pathfinderMob.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(pathfinderMob, 1.0D));
                             pathfinderMob.goalSelector.addGoal(4, new RandomLookAroundGoal(pathfinderMob));
 
-                            // Agregar comportamientos de objetivo
                             pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
-                            pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob, LivingEntity.class, 10, true, false, (target) -> {
+                            pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob,
+                                    LivingEntity.class, 10, true, false, (target) -> {
                                 if (target instanceof Player) return false;
                                 if (target.getTags().contains("friendly")) return false;
                                 if (target.getTags().contains("summoned")) return false;
@@ -244,16 +214,29 @@ public class EntityStorage {
                             }));
                         }
 
-                        // Añadir tags
-                        entity.addTag("friendly");
-                        entity.addTag("summoned");
-                    }
-                    // Añadir la entidad al mundo
-                    if (serverLevel.addFreshEntity(entity)) {
-                        currentSpawnedEntities.add(entity);
-                        spawnedAny = true;
-                        LOGGER.debug("Successfully spawned entity: {} at ({}, {}, {})",
-                                entity, x, y, z);
+                        // Verificar y sincronizar tags
+                        if (serverLevel.addFreshEntity(entity)) {
+                            // Asegurar que los tags se apliquen después de añadir la entidad
+                            entity.addTag("friendly");
+                            entity.addTag("summoned");
+
+                            // Sincronizar con todos los jugadores cercanos
+                            for (ServerPlayer nearbyPlayer : serverLevel.players()) {
+                                if (nearbyPlayer.distanceTo(entity) < 64.0D) {
+                                    serverLevel.getChunkSource().broadcastAndSend(entity,
+                                            new ClientboundSetEntityDataPacket(entity.getId(),
+                                                    entity.getEntityData().getNonDefaultValues()));
+                                }
+                            }
+
+                            EntityVisualEffects.createSummonEffect(entity, serverLevel);
+                            currentSpawnedEntities.add(entity);
+                            spawnedAny = true;
+
+                            LOGGER.debug("Successfully spawned entity: {} at ({}, {}, {})",
+                                    entity, x, y, z);
+                            System.out.println("Tags after spawn: " + entity.getTags()); // Debug log
+                        }
                     }
 
                 } catch (Exception e) {
@@ -264,8 +247,6 @@ public class EntityStorage {
 
         if (!currentSpawnedEntities.isEmpty()) {
             spawnedEntities.put(playerUUID, currentSpawnedEntities);
-            // Ya no eliminamos las entidades almacenadas
-            // playerEntities.remove(playerUUID); <- Esta línea se elimina
         }
 
         return spawnedAny;
@@ -290,7 +271,7 @@ public class EntityStorage {
     public static void clearEntities(UUID playerUUID) {
         playerEntities.remove(playerUUID);
         clearSpawnedEntities(playerUUID);
-        shownLimitMessages.remove(playerUUID); // Limpiar también los mensajes mostrados
+        shownLimitMessages.remove(playerUUID);
         LOGGER.debug("Cleared all stored entities for player: {}", playerUUID);
         markDirty();
     }
@@ -300,7 +281,6 @@ public class EntityStorage {
                 !playerEntities.get(playerUUID).isEmpty();
     }
 
-    // Persistent State Management
     private static EntityStorageState persistentState;
 
     private static void markDirty() {
@@ -332,7 +312,6 @@ public class EntityStorage {
     public static void onPlayerLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
         Player player = event.getEntity();
         UUID playerUUID = player.getUUID();
-
         LOGGER.debug("Player {} disconnected, removing their spawned entities", player.getName().getString());
         clearSpawnedEntities(playerUUID);
     }

@@ -24,3 +24,7 @@ mandatory=true
 versionRange="[1.20.1,1.21)"
 ordering="NONE"
 side="BOTH"
+
+[modproperties.solo_leveling_system]
+catalogueImageIcon="icon.png"
+displayTest="MATCH_VERSION"
