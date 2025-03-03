@@ -34,8 +34,6 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.util.HashSet;
-import java.util.Set;
 
 @Mod(SoloLevelingSystem.MODID)
 public class SoloLevelingSystem {
@@ -130,10 +128,18 @@ public class SoloLevelingSystem {
 
                             var renderer = event.getRenderer(livingEntityType);
                             if (renderer instanceof LivingEntityRenderer) {
-                                addLayerToRenderer((LivingEntityRenderer<?, ?>) renderer);
+                                @SuppressWarnings({"unchecked", "rawtypes"})
+                                LivingEntityRenderer<LivingEntity, EntityModel<LivingEntity>> livingRenderer =
+                                        (LivingEntityRenderer) renderer;
+
+                                @SuppressWarnings({"unchecked", "rawtypes"})
+                                SummonedEntityLayer<LivingEntity> layer =
+                                        new SummonedEntityLayer(livingRenderer);
+
+                                livingRenderer.addLayer(layer);
                             }
                         } catch (Exception e) {
-                            LOGGER.error("Error adding layer for entity type {}: {}",
+                            LOGGER.error("Failed to add layer for {}: {}",
                                     entityType.getDescriptionId(), e.getMessage());
                         }
                     });
@@ -142,22 +148,6 @@ public class SoloLevelingSystem {
         private static boolean isLivingEntityType(EntityType<?> type) {
             return type.getBaseClass() != null &&
                     LivingEntity.class.isAssignableFrom(type.getBaseClass());
-        }
-
-        private static <T extends LivingEntity> void addLayerToRenderer(LivingEntityRenderer<?, ?> renderer) {
-            try {
-                @SuppressWarnings({"unchecked", "rawtypes"})
-                LivingEntityRenderer<T, EntityModel<T>> livingRenderer =
-                        (LivingEntityRenderer) renderer;
-
-                @SuppressWarnings({"unchecked", "rawtypes"})
-                SummonedEntityLayer<T, EntityModel<T>> layer =
-                        new SummonedEntityLayer(livingRenderer);
-
-                livingRenderer.addLayer(layer);
-            } catch (Exception e) {
-                LOGGER.error("Failed to add layer to renderer: {}", e.getMessage());
-            }
         }
     }
 
