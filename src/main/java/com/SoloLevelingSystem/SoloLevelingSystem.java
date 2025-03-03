@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Mod(SoloLevelingSystem.MODID)
 public class SoloLevelingSystem {
@@ -90,7 +89,6 @@ public class SoloLevelingSystem {
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
         private static final Logger CLIENT_LOGGER = LoggerFactory.getLogger(ClientModEvents.class);
-        private static final Set<Class<?>> PROCESSED_RENDERERS = new HashSet<>();
 
         public static final ModelLayerLocation SUMMONED_LAYER = new ModelLayerLocation(
                 new ResourceLocation(MODID, "summoned_overlay"), "main");
@@ -118,45 +116,51 @@ public class SoloLevelingSystem {
         }
     }
 
-
     @Mod.EventBusSubscriber(modid = MODID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
     public static class ClientEvents {
         @SubscribeEvent
         public static void registerLayers(EntityRenderersEvent.AddLayers event) {
-            // Obtenemos todos los tipos de entidades registrados en Forge
-            ForgeRegistries.ENTITY_TYPES.getEntries().forEach(entry -> {
-                EntityType<?> entityType = entry.getValue();
+            ForgeRegistries.ENTITY_TYPES.getValues().stream()
+                    .filter(ClientEvents::isLivingEntityType)
+                    .forEach(entityType -> {
+                        try {
+                            @SuppressWarnings("unchecked")
+                            EntityType<? extends LivingEntity> livingEntityType =
+                                    (EntityType<? extends LivingEntity>) entityType;
 
-                // Verificamos si el tipo de entidad puede ser renderizado como LivingEntity
-                if (isLivingEntityType(entityType)) {
-                    EntityRenderer<?> renderer = event.getRenderer((EntityType)entityType);
-                    if (renderer instanceof LivingEntityRenderer) {
-                        addLayerToRenderer((LivingEntityRenderer<?, ?>)renderer);
-                    }
-                }
-            });
+                            var renderer = event.getRenderer(livingEntityType);
+                            if (renderer instanceof LivingEntityRenderer) {
+                                addLayerToRenderer((LivingEntityRenderer<?, ?>) renderer);
+                            }
+                        } catch (Exception e) {
+                            LOGGER.error("Error adding layer for entity type {}: {}",
+                                    entityType.getDescriptionId(), e.getMessage());
+                        }
+                    });
         }
 
         private static boolean isLivingEntityType(EntityType<?> type) {
-            try {
-                // Verificamos si la clase de la entidad es una subclase de LivingEntity
-                return LivingEntity.class.isAssignableFrom(type.getBaseClass());
-            } catch (Exception e) {
-                return false;
-            }
+            return type.getBaseClass() != null &&
+                    LivingEntity.class.isAssignableFrom(type.getBaseClass());
         }
 
-        private static void addLayerToRenderer(LivingEntityRenderer<?, ?> renderer) {
+        private static <T extends LivingEntity> void addLayerToRenderer(LivingEntityRenderer<?, ?> renderer) {
             try {
-                @SuppressWarnings("unchecked")
-                LivingEntityRenderer<LivingEntity, EntityModel<LivingEntity>> livingRenderer =
-                        (LivingEntityRenderer<LivingEntity, EntityModel<LivingEntity>>) renderer;
-                livingRenderer.addLayer(new SummonedEntityLayer<>(livingRenderer));
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                LivingEntityRenderer<T, EntityModel<T>> livingRenderer =
+                        (LivingEntityRenderer) renderer;
+
+                @SuppressWarnings({"unchecked", "rawtypes"})
+                SummonedEntityLayer<T, EntityModel<T>> layer =
+                        new SummonedEntityLayer(livingRenderer);
+
+                livingRenderer.addLayer(layer);
             } catch (Exception e) {
                 LOGGER.error("Failed to add layer to renderer: {}", e.getMessage());
             }
         }
     }
+
     public static SimpleChannel getChannel() {
         return CHANNEL;
     }
