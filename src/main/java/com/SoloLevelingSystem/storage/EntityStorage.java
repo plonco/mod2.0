@@ -211,6 +211,14 @@ public class EntityStorage {
                             pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
                             pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob,
                                     LivingEntity.class, 10, true, false, (target) -> {
+                                if (target.getTags().contains("friendly")) {
+                                    LOGGER.debug("Target is friendly, ignoring: {}", target);
+                                    return false;
+                                }
+                                if (target.getTags().contains("summoned")) {
+                                    LOGGER.debug("Target is summoned, ignoring: {}", target);
+                                    return false;
+                                }
                                 if (mob instanceof RangedAttackMob rangedAttackMob) {
                                     pathfinderMob.goalSelector.addGoal(2, new RangedAttackGoal(rangedAttackMob, 1.0D, 20, 15.0F));
                                 }
@@ -218,8 +226,16 @@ public class EntityStorage {
                                     mob.goalSelector.addGoal(1, new SwellGoal((Creeper) mob));
                                 }
                                 if (target instanceof Player) return false;
-                                if (target.getTags().contains("friendly")) return false;
-                                if (target.getTags().contains("summoned")) return false;
+                                boolean hasSummonedTag = target.getTags().contains("summoned");
+                                LOGGER.debug("Target {} has 'summoned' tag: {}", target, hasSummonedTag);
+
+                                if (hasSummonedTag) {
+                                    LOGGER.debug("Target is summoned, ignoring: {}", target);
+                                    LOGGER.debug("Target UUID: {}", target.getUUID());
+                                    LOGGER.debug("Entity UUID: {}", entity.getUUID());
+                                    return false;
+                                }
+
                                 if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
                                 return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
                             }));

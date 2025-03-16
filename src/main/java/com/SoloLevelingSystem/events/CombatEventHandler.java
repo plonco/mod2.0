@@ -20,41 +20,27 @@ public class CombatEventHandler {
         Player player = event.getEntity();
         Entity target = event.getTarget();
 
-        // Log inicial para debug
-        SoloLevelingSystem.getLogger().info("AttackEntityEvent disparado: Jugador {} atacando a {}",
-                player.getName().getString(), target.getName().getString());
-
         // Verificar que el objetivo es una entidad viva
         if (!(target instanceof LivingEntity livingTarget)) {
-            SoloLevelingSystem.getLogger().info("El objetivo no es una entidad viva");
             return;
         }
 
         // Usar el método getLivingPlayerEntities para obtener solo las entidades vivas
         List<Entity> playerEntities = EntityStorage.getLivingPlayerEntities(player.getUUID());
 
-        if (playerEntities.isEmpty()) {
-            SoloLevelingSystem.getLogger().info("No se encontraron entidades para el jugador");
-            return;
-        }
-
-        SoloLevelingSystem.getLogger().info("Encontradas {} entidades del jugador", playerEntities.size());
-
         // Hacer que todas las entidades del jugador ataquen al objetivo
         for (Entity summonedEntity : playerEntities) {
-            if (summonedEntity instanceof Mob mob && summonedEntity != target) {
-                // Asegurarse de que la entidad esté viva y no sea el objetivo
+            if (summonedEntity instanceof Mob mob) {
+                // Asegurarse de que la entidad esté viva
                 if (mob.isAlive()) {
-                    // Log antes de establecer el objetivo
-                    SoloLevelingSystem.getLogger().info("Configurando {} para atacar a {}",
-                            mob.getName().getString(), livingTarget.getName().getString());
+
+                    // *** NUEVA CONDICIÓN: No atacar a otras entidades invocadas ***
+                    if (target.getTags().contains("summoned")) {
+                        continue; // Saltar a la siguiente entidad
+                    }
 
                     mob.setTarget(livingTarget);
                     mob.setAggressive(true);  // Hacer que la entidad sea agresiva
-
-                    // Log después de establecer el objetivo
-                    SoloLevelingSystem.getLogger().info("Objetivo establecido para {}: {}",
-                            mob.getName().getString(), mob.getTarget() != null ? "éxito" : "fallido");
                 }
             }
         }
@@ -66,37 +52,26 @@ public class CombatEventHandler {
             return;
         }
 
-        // Log inicial para debug
-        SoloLevelingSystem.getLogger().info("LivingHurtEvent disparado: Jugador {} recibió daño",
-                player.getName().getString());
-
         // Obtener el atacante
         Entity attacker = event.getSource().getEntity();
         if (!(attacker instanceof LivingEntity livingAttacker)) {
-            SoloLevelingSystem.getLogger().info("El atacante no es una entidad viva");
             return;
         }
 
         // Obtener las entidades del jugador
         List<Entity> playerEntities = EntityStorage.getLivingPlayerEntities(player.getUUID());
 
-        if (playerEntities.isEmpty()) {
-            SoloLevelingSystem.getLogger().info("No se encontraron entidades para defender al jugador");
-            return;
-        }
-
-        SoloLevelingSystem.getLogger().info("Ordenando a {} entidades que defiendan contra {}",
-                playerEntities.size(), attacker.getName().getString());
-
         // Hacer que todas las entidades del jugador ataquen al agresor
         for (Entity summonedEntity : playerEntities) {
-            if (summonedEntity instanceof Mob mob && summonedEntity != attacker) {
+            if (summonedEntity instanceof Mob mob) {
                 if (mob.isAlive()) {
+                    // *** NUEVA CONDICIÓN: No atacar a otras entidades invocadas ***
+                    if (attacker.getTags().contains("summoned")) {
+                        continue; // Saltar a la siguiente entidad
+                    }
+
                     mob.setTarget((LivingEntity) attacker);
                     mob.setAggressive(true);  // Hacer que la entidad sea agresiva
-
-                    SoloLevelingSystem.getLogger().info("Entidad {} defendiendo contra {}",
-                            mob.getName().getString(), attacker.getName().getString());
                 }
             }
         }
