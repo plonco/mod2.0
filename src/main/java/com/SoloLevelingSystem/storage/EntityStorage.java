@@ -18,7 +18,9 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.RangedAttackMob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
@@ -190,12 +192,15 @@ public class EntityStorage {
                         mob.setInvulnerable(false);
                         mob.setAirSupply(mob.getMaxAirSupply());
 
-                        mob.goalSelector.addGoal(0, new CustomFollowPlayerGoal(
+                        mob.goalSelector.getAvailableGoals().clear();
+                        mob.targetSelector.getAvailableGoals().clear();
+
+                        mob.goalSelector.addGoal(1, new CustomFollowPlayerGoal(
                                 mob,
                                 player,
                                 1.0D,
-                                10.0F,
-                                2.0F
+                                20.0F,
+                                5.0F
                         ));
 
                         if (mob instanceof PathfinderMob pathfinderMob) {
@@ -206,6 +211,12 @@ public class EntityStorage {
                             pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
                             pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob,
                                     LivingEntity.class, 10, true, false, (target) -> {
+                                if (mob instanceof RangedAttackMob rangedAttackMob) {
+                                    pathfinderMob.goalSelector.addGoal(2, new RangedAttackGoal(rangedAttackMob, 1.0D, 20, 15.0F));
+                                }
+                                if (mob instanceof Creeper) {
+                                    mob.goalSelector.addGoal(1, new SwellGoal((Creeper) mob));
+                                }
                                 if (target instanceof Player) return false;
                                 if (target.getTags().contains("friendly")) return false;
                                 if (target.getTags().contains("summoned")) return false;
