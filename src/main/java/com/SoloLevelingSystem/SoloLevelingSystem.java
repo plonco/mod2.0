@@ -8,9 +8,6 @@ import com.SoloLevelingSystem.network.SpawnEntitiesMessage;
 import com.SoloLevelingSystem.storage.EntityStorage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
-import net.minecraft.client.model.geom.ModelLayerLocation;
-import net.minecraft.client.model.geom.builders.LayerDefinition;
-import net.minecraft.client.model.geom.builders.MeshDefinition;
 import net.minecraft.client.renderer.entity.*;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
@@ -22,6 +19,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -63,6 +61,7 @@ public class SoloLevelingSystem {
         MinecraftForge.EVENT_BUS.register(EntityStorage.class);
         MinecraftForge.EVENT_BUS.register(new EntityDamageHandler());
 
+
         LOGGER.info("Solo Leveling System Mod initialized successfully");
     }
 
@@ -75,7 +74,6 @@ public class SoloLevelingSystem {
                 SpawnEntitiesMessage::handle
         );
     }
-
     @SubscribeEvent
     public void onServerStarting(ServerStartedEvent event) {
         LOGGER.info("Solo Leveling System - Server Starting");
@@ -84,17 +82,6 @@ public class SoloLevelingSystem {
     @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     public static class ClientModEvents {
         private static final Logger CLIENT_LOGGER = LoggerFactory.getLogger(ClientModEvents.class);
-
-        public static final ModelLayerLocation SUMMONED_LAYER = new ModelLayerLocation(
-                new ResourceLocation(MODID, "summoned_overlay"), "main");
-
-        @SubscribeEvent
-        public static void registerLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event) {
-            event.registerLayerDefinition(
-                    SUMMONED_LAYER,
-                    () -> LayerDefinition.create(new MeshDefinition(), 64, 64)
-            );
-        }
 
         @SubscribeEvent
         public static void onClientSetup(FMLClientSetupEvent event) {
@@ -129,7 +116,10 @@ public class SoloLevelingSystem {
                                 LivingEntityRenderer<LivingEntity, EntityModel<LivingEntity>> livingRenderer =
                                         (LivingEntityRenderer) renderer;
 
-                                
+                                // Aquí puedes agregar configuración adicional para el renderizado
+                                // si es necesario, pero el efecto principal se manejará en EntityRenderHandler
+                                LOGGER.debug("Registered shadow rendering capability for: {}",
+                                        entityType.getDescriptionId());
                             }
                         } catch (Exception e) {
                             LOGGER.error("Failed to add layer for {}: {}",

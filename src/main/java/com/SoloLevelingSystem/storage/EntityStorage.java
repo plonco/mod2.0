@@ -201,37 +201,22 @@ public class EntityStorage {
                         ));
 
                         if (mob instanceof PathfinderMob pathfinderMob) {
-                            pathfinderMob.goalSelector.addGoal(2, new MeleeAttackGoal(pathfinderMob, 1.2D, true));
-                            pathfinderMob.goalSelector.addGoal(3, new WaterAvoidingRandomStrollGoal(pathfinderMob, 1.0D));
-                            pathfinderMob.goalSelector.addGoal(4, new RandomLookAroundGoal(pathfinderMob));
+                            pathfinderMob.goalSelector.addGoal(3, new MeleeAttackGoal(pathfinderMob, 1.2D, true));
+                            pathfinderMob.goalSelector.addGoal(4, new WaterAvoidingRandomStrollGoal(pathfinderMob, 1.0D));
+                            pathfinderMob.goalSelector.addGoal(5, new RandomLookAroundGoal(pathfinderMob));
 
-                            pathfinderMob.targetSelector.addGoal(1, new HurtByTargetGoal(pathfinderMob));
+                            pathfinderMob.targetSelector.addGoal(2, new HurtByTargetGoal(pathfinderMob));
                             pathfinderMob.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(pathfinderMob,
                                     LivingEntity.class, 10, true, false, (target) -> {
-                                if (target.getTags().contains("friendly")) {
-                                    LOGGER.debug("Target is friendly, ignoring: {}", target);
-                                    return false;
-                                }
-                                if (target.getTags().contains("psummoned")) {
-                                    LOGGER.debug("Target is summoned, ignoring: {}", target);
-                                    return false;
-                                }
+
                                 if (mob instanceof RangedAttackMob rangedAttackMob) {
                                     pathfinderMob.goalSelector.addGoal(2, new RangedAttackGoal(rangedAttackMob, 1.0D, 20, 15.0F));
                                 }
                                 if (mob instanceof Creeper) {
-                                    mob.goalSelector.addGoal(1, new SwellGoal((Creeper) mob));
+                                    mob.goalSelector.addGoal(2, new SwellGoal((Creeper) mob));
                                 }
-                                if (target instanceof Player) return false;
-                                boolean hasSummonedTag = target.getTags().contains("psummoned");
-                                LOGGER.debug("Target {} has 'psummoned' tag: {}", target, hasSummonedTag);
 
-                                if (hasSummonedTag) {
-                                    LOGGER.debug("Target is psummoned, ignoring: {}", target);
-                                    LOGGER.debug("Target UUID: {}", target.getUUID());
-                                    LOGGER.debug("Entity UUID: {}", entity.getUUID());
-                                    return false;
-                                }
+
 
                                 if (target instanceof Mob targetMob && targetMob.getTarget() == player) return true;
                                 return target == player.getLastHurtMob() || target == player.getLastHurtByMob();
