@@ -1,11 +1,9 @@
 package com.SoloLevelingSystem.storage;
 
 import com.SoloLevelingSystem.SoloLevelingSystem;
-import com.SoloLevelingSystem.client.render.SummonedEntityLayer;
 import com.SoloLevelingSystem.configs.ConfigManager;
 import com.SoloLevelingSystem.entity.ai.CustomFollowPlayerGoal;
 import com.SoloLevelingSystem.events.EntityVisualEffects;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -19,7 +17,6 @@ import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.monster.RangedAttackMob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -168,7 +165,7 @@ public class EntityStorage {
                     // Preparar los tags antes de cargar la entidad
                     ListTag tagsListPre = new ListTag();
                     tagsListPre.add(StringTag.valueOf("friendly"));
-                    tagsListPre.add(StringTag.valueOf("summoned"));
+                    tagsListPre.add(StringTag.valueOf("psummoned"));
                     modifiedData.put("Tags", tagsListPre);
 
                     entity.load(modifiedData);
@@ -215,7 +212,7 @@ public class EntityStorage {
                                     LOGGER.debug("Target is friendly, ignoring: {}", target);
                                     return false;
                                 }
-                                if (target.getTags().contains("summoned")) {
+                                if (target.getTags().contains("psummoned")) {
                                     LOGGER.debug("Target is summoned, ignoring: {}", target);
                                     return false;
                                 }
@@ -226,11 +223,11 @@ public class EntityStorage {
                                     mob.goalSelector.addGoal(1, new SwellGoal((Creeper) mob));
                                 }
                                 if (target instanceof Player) return false;
-                                boolean hasSummonedTag = target.getTags().contains("summoned");
-                                LOGGER.debug("Target {} has 'summoned' tag: {}", target, hasSummonedTag);
+                                boolean hasSummonedTag = target.getTags().contains("psummoned");
+                                LOGGER.debug("Target {} has 'psummoned' tag: {}", target, hasSummonedTag);
 
                                 if (hasSummonedTag) {
-                                    LOGGER.debug("Target is summoned, ignoring: {}", target);
+                                    LOGGER.debug("Target is psummoned, ignoring: {}", target);
                                     LOGGER.debug("Target UUID: {}", target.getUUID());
                                     LOGGER.debug("Entity UUID: {}", entity.getUUID());
                                     return false;
@@ -244,8 +241,7 @@ public class EntityStorage {
                         // Verificar y sincronizar tags
                         if (serverLevel.addFreshEntity(entity)) {
                             // Asegurar que los tags se apliquen después de añadir la entidad
-                            entity.addTag("friendly");
-                            entity.addTag("summoned");
+                            entity.addTag("psummoned");
 
                             // Sincronizar con todos los jugadores cercanos
                             for (ServerPlayer nearbyPlayer : serverLevel.players()) {
@@ -257,6 +253,7 @@ public class EntityStorage {
                             }
 
                             EntityVisualEffects.createSummonEffect(entity, serverLevel);
+
                             currentSpawnedEntities.add(entity);
                             spawnedAny = true;
 

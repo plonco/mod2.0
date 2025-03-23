@@ -25,7 +25,7 @@ public class EntityVisualEffects {
         Entity entity = event.getEntity();
 
         // Verificar si es una entidad invocada
-        if (entity.getTags().contains("summoned") &&
+        if (entity.getTags().contains("psummoned") &&
                 entity.level() instanceof ServerLevel serverLevel) {
 
             // Crear partículas cada PARTICLE_SPAWN_RATE ticks
@@ -61,17 +61,17 @@ public class EntityVisualEffects {
             );
 
             // Partículas de delfín (celestes)
-            serverLevel.sendParticles(
-                    ParticleTypes.DOLPHIN,
-                    baseX + offsetX,
-                    baseY + offsetY,
-                    baseZ + offsetZ,
-                    1,
-                    0.0,
-                    0.0,
-                    0.0,
-                    PARTICLE_SPEED
-            );
+//            serverLevel.sendParticles(
+//                    ParticleTypes.DOLPHIN,
+//                    baseX + offsetX,
+//                    baseY + offsetY,
+//                    baseZ + offsetZ,
+//                    1,
+//                    0.0,
+//                    0.0,
+//                    0.0,
+//                    PARTICLE_SPEED
+//            );
         }
     }
 
@@ -102,18 +102,18 @@ public class EntityVisualEffects {
                     0.02
             );
 
-            // Partículas adicionales para efecto
-            serverLevel.sendParticles(
-                    ParticleTypes.DOLPHIN,
-                    baseX + offsetX,
-                    baseY + (i * 0.1),
-                    baseZ + offsetZ,
-                    1,
-                    0.0,
-                    0.05,
-                    0.0,
-                    0.01
-            );
+//            // Partículas adicionales para efecto
+//            serverLevel.sendParticles(
+//                    ParticleTypes.DOLPHIN,
+//                    baseX + offsetX,
+//                    baseY + (i * 0.1),
+//                    baseZ + offsetZ,
+//                    1,
+//                    0.0,
+//                    0.05,
+//                    0.0,
+//                    0.01
+//            );
         }
     }
 }

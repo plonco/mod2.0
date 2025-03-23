@@ -120,7 +120,7 @@ public class EventHandler {
     }
     @SubscribeEvent
     public static void onEntityDrop(LivingDropsEvent event) {
-        if (event.getEntity() instanceof Mob mob && mob.getTags().contains("summoned")) {
+        if (event.getEntity() instanceof Mob mob && mob.getTags().contains("psummoned")) {
             // Cancela todos los drops
             event.setCanceled(true);
         }

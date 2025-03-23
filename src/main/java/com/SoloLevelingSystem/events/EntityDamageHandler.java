@@ -21,15 +21,15 @@ public class EntityDamageHandler {
 
         // Verificar si la entidad que recibe el daño y la entidad que causa el daño
         // (o la entidad que disparó el proyectil) son entidades invocadas.
-        boolean targetIsSummoned = entity instanceof Mob && entity.getTags().contains("summoned");
+        boolean targetIsSummoned = entity instanceof Mob && entity.getTags().contains("psummoned");
         boolean sourceIsSummoned = false;
 
-        if (attacker instanceof Mob && attacker.getTags().contains("summoned")) {
+        if (attacker instanceof Mob && attacker.getTags().contains("psummoned")) {
             sourceIsSummoned = true;
         } else if (source.getDirectEntity() instanceof Projectile) {
             // Si el daño proviene de un proyectil, verificar si la entidad que disparó el proyectil es una entidad invocada
             Entity owner = ((Projectile) source.getDirectEntity()).getOwner();
-            if (owner instanceof Mob && owner.getTags().contains("summoned")) {
+            if (owner instanceof Mob && owner.getTags().contains("psummoned")) {
                 sourceIsSummoned = true;
             }
         }
@@ -43,7 +43,7 @@ public class EntityDamageHandler {
             return;
         }
 
-        if (entity instanceof Mob mob && mob.getTags().contains("summoned")) {
+        if (entity instanceof Mob mob && mob.getTags().contains("psummoned")) {
             String damageType = source.getMsgId();
 
             // Agregamos "sun_damage" y "inSunlight" para cubrir diferentes versiones de Minecraft
@@ -68,7 +68,7 @@ public class EntityDamageHandler {
     // Agregar un evento adicional específicamente para el daño del sol
     @SubscribeEvent
     public static void onLivingUpdate(net.minecraftforge.event.entity.living.LivingEvent.LivingTickEvent event) {
-        if (event.getEntity() instanceof Mob mob && mob.getTags().contains("summoned")) {
+        if (event.getEntity() instanceof Mob mob && mob.getTags().contains("psummoned")) {
             // Prevenir que la entidad se queme por el sol
             if (mob.isOnFire()) {
                 mob.clearFire();

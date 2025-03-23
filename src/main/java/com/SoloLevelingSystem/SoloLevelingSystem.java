@@ -1,14 +1,11 @@
 package com.SoloLevelingSystem;
 
 import com.SoloLevelingSystem.configs.ConfigManager;
-import com.SoloLevelingSystem.entity.ai.CustomFollowPlayerGoal;
 import com.SoloLevelingSystem.events.EntityDamageHandler;
 import com.SoloLevelingSystem.events.EventHandler;
 import com.SoloLevelingSystem.events.CombatEventHandler;
 import com.SoloLevelingSystem.network.SpawnEntitiesMessage;
 import com.SoloLevelingSystem.storage.EntityStorage;
-import com.SoloLevelingSystem.client.render.SummonedEntityLayer;
-import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.geom.ModelLayerLocation;
@@ -132,11 +129,7 @@ public class SoloLevelingSystem {
                                 LivingEntityRenderer<LivingEntity, EntityModel<LivingEntity>> livingRenderer =
                                         (LivingEntityRenderer) renderer;
 
-                                @SuppressWarnings({"unchecked", "rawtypes"})
-                                SummonedEntityLayer<LivingEntity> layer =
-                                        new SummonedEntityLayer(livingRenderer);
-
-                                livingRenderer.addLayer(layer);
+                                
                             }
                         } catch (Exception e) {
                             LOGGER.error("Failed to add layer for {}: {}",

@@ -33,9 +33,9 @@ public class CombatEventHandler {
             if (summonedEntity instanceof Mob mob) {
                 // Asegurarse de que la entidad esté viva
                 if (mob.isAlive()) {
-
                     // *** NUEVA CONDICIÓN: No atacar a otras entidades invocadas ***
-                    if (target.getTags().contains("summoned")) {
+                    if (target.getTags().contains("psummoned")) {
+                        mob.skipAttackInteraction(summonedEntity);
                         continue; // Saltar a la siguiente entidad
                     }
 
@@ -66,7 +66,7 @@ public class CombatEventHandler {
             if (summonedEntity instanceof Mob mob) {
                 if (mob.isAlive()) {
                     // *** NUEVA CONDICIÓN: No atacar a otras entidades invocadas ***
-                    if (attacker.getTags().contains("summoned")) {
+                    if (attacker.getTags().contains("psummoned")) {
                         continue; // Saltar a la siguiente entidad
                     }
 

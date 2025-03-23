@@ -26,9 +26,9 @@ public class ProjectileEventHandler {
                 Entity target = entityHitResult.getEntity();
 
                 // Check if the target is a summoned entity
-                if (target instanceof Mob && target.getTags().contains("summoned")) {
+                if (target instanceof Mob && target.getTags().contains("psummoned")) {
                     // Check if the projectile was fired by a summoned entity
-                    if (projectile.getOwner() instanceof Mob && projectile.getOwner().getTags().contains("summoned")) {
+                    if (projectile.getOwner() instanceof Mob && projectile.getOwner().getTags().contains("psummoned")) {
                         // Get the original target (if available)
                         LivingEntity originalTarget = null;
                         if (projectile.getPersistentData().contains("originalTargetId")) {
