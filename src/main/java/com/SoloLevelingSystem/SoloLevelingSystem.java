@@ -98,42 +98,6 @@ public class SoloLevelingSystem {
         }
     }
 
-    @Mod.EventBusSubscriber(modid = MODID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
-    public static class ClientEvents {
-        @SubscribeEvent
-        public static void registerLayers(EntityRenderersEvent.AddLayers event) {
-            ForgeRegistries.ENTITY_TYPES.getValues().stream()
-                    .filter(ClientEvents::isLivingEntityType)
-                    .forEach(entityType -> {
-                        try {
-                            @SuppressWarnings("unchecked")
-                            EntityType<? extends LivingEntity> livingEntityType =
-                                    (EntityType<? extends LivingEntity>) entityType;
-
-                            var renderer = event.getRenderer(livingEntityType);
-                            if (renderer instanceof LivingEntityRenderer) {
-                                @SuppressWarnings({"unchecked", "rawtypes"})
-                                LivingEntityRenderer<LivingEntity, EntityModel<LivingEntity>> livingRenderer =
-                                        (LivingEntityRenderer) renderer;
-
-                                // Aquí puedes agregar configuración adicional para el renderizado
-                                // si es necesario, pero el efecto principal se manejará en EntityRenderHandler
-                                LOGGER.debug("Registered shadow rendering capability for: {}",
-                                        entityType.getDescriptionId());
-                            }
-                        } catch (Exception e) {
-                            LOGGER.error("Failed to add layer for {}: {}",
-                                    entityType.getDescriptionId(), e.getMessage());
-                        }
-                    });
-        }
-
-        private static boolean isLivingEntityType(EntityType<?> type) {
-            return type.getBaseClass() != null &&
-                    LivingEntity.class.isAssignableFrom(type.getBaseClass());
-        }
-    }
-
     public static SimpleChannel getChannel() {
         return CHANNEL;
     }
